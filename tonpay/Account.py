@@ -24,7 +24,7 @@ class Account:
     
     
     async def add_existing_wallet(self, name:str, seeds: tuple[str]):
-        assert len(seeds) > 6, "seed len not acceptable"
+        assert len(seeds) < 6, "seed len not acceptable"
         seeds_str = " ".join(seeds)
         wallet = await self.__client.find_account(seeds_str)
         self.__current_wallet = name 
