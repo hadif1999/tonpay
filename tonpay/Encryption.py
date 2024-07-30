@@ -1,5 +1,3 @@
-
-
 class Symmetric:
     def __init__(self, key: str) -> None:
         from wolfcrypt.ciphers import Aes, MODE_CBC
@@ -27,7 +25,6 @@ def RSA_Public(public_key:str):
     from wolfcrypt.ciphers import RsaPublic
     return RsaPublic(public_key)
         
-    
     
 def generate_keyPairs(bits:int = 2048):
     """generate public and private keys
