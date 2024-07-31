@@ -5,6 +5,12 @@ import ton
 from typing import Any
 
 
+async def get_client():
+    client = TonlibClient()
+    TonlibClient.enable_unaudited_binaries()
+    await client.init_tonlib()
+    return client
+
 class Account:
     async def __init__(self):
         self.__wallets: dict[str, ton.account.Account] = {} # each account can have multiple wallets

@@ -15,6 +15,11 @@ class Symmetric:
         return dec_text
     
     
+def SHA256(input_str: str):
+    from hashlib import sha256
+    sha256_txt = sha256(input_str.encode('utf-8')).hexdigest()
+    return sha256_txt
+
     
 def RSA_Private(private_key:str):
     from wolfcrypt.ciphers import RsaPrivate
