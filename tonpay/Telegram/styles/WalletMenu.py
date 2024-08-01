@@ -1,6 +1,6 @@
 from telegram import InlineKeyboardMarkup, Update, InlineKeyboardButton as IKB
 from ton.account import Account
-from styles.Utils import back_home_keyboard as bhk
+from ..styles.Utils import back_home_keyboard as bhk
 
 
 def render_keyboard(refresh_txt:str, QrCode_txt:str, transfer_txt:str,

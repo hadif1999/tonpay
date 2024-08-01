@@ -2,9 +2,9 @@ import json
 from loguru import logger
 import sys
 
-config = {}
+_config = {}
 with open("config.json", "r") as config_file:
-    config = json.loads(config_file.read())
+    _config = json.loads(config_file.read())
     
 # defining loggers 
 fmt = (

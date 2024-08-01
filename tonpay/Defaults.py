@@ -1,4 +1,7 @@
-from . import config
+import json
+
+with open("tonpay/config.json", 'r') as file:
+    config = json.loads(file.read() )
 
 max_user_demo_wallets = config["user"].get("max_wallets", 5)
 datetime_fmt = config["wallet_encryption"].get("datetime_format", "%Y-%m-%y_%H:%M:%S")

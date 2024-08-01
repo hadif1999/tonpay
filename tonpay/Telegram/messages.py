@@ -1,6 +1,6 @@
 
 from telegram import InlineKeyboardMarkup, Update
-from styles import MainMenu, FinanceMenu, WalletsMenu, WalletMenu
+from .styles import MainMenu, FinanceMenu, WalletsMenu, WalletMenu
 from ton.account import Account
 
 

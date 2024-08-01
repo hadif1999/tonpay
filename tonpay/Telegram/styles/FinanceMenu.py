@@ -1,6 +1,6 @@
 from typing import Iterable
 from telegram import InlineKeyboardButton as IKB
-from styles.Utils import back_home_keyboard as bhk
+from ..styles.Utils import back_home_keyboard as bhk
 
 
 def render_keyboard(refresh_txt:str, wallets_txt:str, transactions_txt:str,

@@ -1,6 +1,4 @@
-import logging
-
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -9,8 +7,13 @@ from telegram.ext import (
     ConversationHandler,
 )
 
-from messages import MainMenu_msg, wallets_msg, FinanceMenu_msg, wallet_msg
+from .messages import MainMenu_msg, wallets_msg, FinanceMenu_msg, wallet_msg
 import os
+from database.Models import (User,
+                            #  External_Wallet, Internal_Wallet,
+                               AsyncSession, ASYNC_ENGINE, add_row)
+from sqlmodel import select
+from loguru import logger
 
 
 # state and page names
@@ -19,29 +22,35 @@ MAIN_ROUTE, END_ROUTE = 0, 1
 TOKEN = os.getenv("TOKEN", "7405744199:AAG1Th55Tt6jIa6FRG70_49AzLmwd4eGLtg")
 
 
-# Enable logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
-# set higher logging level for httpx to avoid all GET and POST requests being logged
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logger = logging.getLogger(__name__)
-
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await MainMenu_msg(update, "eng")
+    chat_id = update.effective_user.id
+    user = await User.get(chat_id)
+    if not user: 
+        user.logger.debug("user instance made")
+        user = User(chat_id = chat_id)
+        add_row(user)
     return MAIN_ROUTE
 
 
 async def finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    account = fetch_account(chat_id)
-    await FinanceMenu_msg(update, "eng", account.balance, account.balance_dollar )
+    chat_id = update.effective_user.id
+    user: User = await User.get(chat_id)
+    # toDo: get balance by single unit e.g = "nTON"             
+    balance_ton = sum([(await wallet.get_balance()) if wallet.is_external else wallet.balance
+                        for wallet in user.wallets])
+    user.logger.debug(f"balance calculated: {balance_ton}")
+    # toDo: get_online price by ccxt and update Ton price in dollar
+    balance_dollar = balance_ton
+    await FinanceMenu_msg(update, "eng", balance_ton, balance_dollar )
     return MAIN_ROUTE
     
     
 async def wallets(update: Update, context):
-    account = await fetch_account(chat_id)
-    _wallets = account.get_wallets(asdict = True) 
+    chat_id = update.effective_user.id
+    user: User = await User.get(chat_id)
+    _wallets = {wal.name:wal for wal in user.wallets} 
+    user.logger.debug("fetched user wallets: {wallets}", wallets=list(_wallets.keys()) )
     # await update.callback_query.answer()
     await wallets_msg(update, _wallets, "eng")
     return MAIN_ROUTE
@@ -50,8 +59,11 @@ async def wallets(update: Update, context):
 async def wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     wallet_name = query.data
-    account = await fetch_account(chat_id) 
-    _wallet = account.get_wallet(wallet_name)
+    chat_id = update.effective_user.id
+    user: User = await User.get(chat_id)
+    _wallets = {wal.name:wal for wal in user.wallets}
+    _wallet = _wallets[wallet_name]
+    user.logger.debug("fetched user wallet: {wallet}", wallet=_wallet.name )
     await query.answer()
     await wallet_msg(update, wallet_name, _wallet, "eng")
     return MAIN_ROUTE
