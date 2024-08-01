@@ -9,7 +9,9 @@
 	},
 
 	"general": 
-		{"name": "TONNAPAY"}
+		{"name": "TONNAPAY",
+		"log_level": "DEBUG",
+		"isprod": false}
 
 
 }
