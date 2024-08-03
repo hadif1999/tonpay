@@ -11,7 +11,13 @@
 	"general": 
 		{"name": "TONNAPAY",
 		"log_level": "DEBUG",
-		"isprod": false}
+		"isprod": false,
+		"language": "eng"},
 
+	"telegram":
+		{	
+			"language": "eng",
+			"token": "7405744199:AAG1Th55Tt6jIa6FRG70_49AzLmwd4eGLtg"
+		}
 
 }

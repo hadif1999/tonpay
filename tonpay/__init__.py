@@ -2,16 +2,18 @@ import json
 from loguru import logger
 import sys
 
-_config = {}
+# read json file
 with open("config.json", "r") as config_file:
-    _config = json.loads(config_file.read())
-    
-# defining loggers 
+    config = json.loads(config_file.read())
+
+
+ 
+### defining loggers 
 fmt = (
     "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
     "<level>{level: <8}</level> | "
     "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
-    "cid: {extra[chat_id]} - <level>{message}</level>"
+    "chat_id: {extra[chat_id]} - <level>{message}</level>"
 )
 logger.configure(extra={"chat_id": ""})  # Default values
 logger.remove(None) # removing all loggers

@@ -20,9 +20,7 @@ def render_keyboard(refresh_txt:str, QrCode_txt:str, transfer_txt:str,
 class Eng:
     keyboard = render_keyboard("Refresh", "QR Code", "Transfer", 
                                "Seeds", "Delete", bhk("Back", "Home"))
-    async def __init__(self, wallet_name:str, wallet:Account) -> None:
-        addr = wallet.address
-        balance = await wallet.get_balance()
+    async def __init__(self, wallet_name:str, balance: float, addr: str) -> None:
         self.header = f"""TonPay Wallet
         <b>name:</b> {wallet_name}
         
@@ -43,9 +41,7 @@ class Eng:
 class Fa:
     keyboard = render_keyboard("به روزرسانی", "QR کد", "انتقال", 
                                "کلمات عبور", "حذف", bhk("قبلی", "خانه"))
-    async def __init__(self, wallet_name:str, wallet:Account) -> None:
-        addr = wallet.address
-        balance = await wallet.get_balance()
+    async def __init__(self, wallet_name:str, balance: float, addr: str) -> None:
         self.header = f"""TonPay کیف پول
         <b>نام:</b> {wallet_name}
         

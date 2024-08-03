@@ -26,12 +26,17 @@ def FinanceMenu_msg(update: Update, lang:str = "eng", balance:str|float = 0,
     except AttributeError:
         raise AttributeError(f"{lang} lang not found for finance menu")
     keyboard_markup = InlineKeyboardMarkup(keyboard)
-    return update.message.reply_text(header.format(balance=balance, balance_dollar=balance_dollar),
-                                     reply_markup=keyboard_markup)
+    # return update.message.reply_text(header.format(balance=balance, balance_dollar=balance_dollar),
+    #                                  reply_markup=keyboard_markup)
+    query = update.callback_query 
+    return query.edit_message_text(header.format(balance=balance,
+                                                 balance_dollar=balance_dollar),
+                                                 reply_markup=keyboard_markup)
     
     
-def wallets_msg(update: Update, wallets: dict[str, Account], lang:str = "eng"):
+async def wallets_msg(update: Update, wallets: dict[str, Account], lang:str = "eng"):
     lang = lang.title()
+    query = update.callback_query
     try: 
         lang_cls = getattr(WalletsMenu, lang)
         header = lang_cls.header
@@ -40,24 +45,28 @@ def wallets_msg(update: Update, wallets: dict[str, Account], lang:str = "eng"):
     lang_obj = lang_cls(wallets)
     keyboard = lang_obj.keyboard
     keyboard_markup = InlineKeyboardMarkup(keyboard)
-    return update.message.reply_text(header, reply_markup=keyboard_markup, 
-                                     parse_mode="HTML")
+    await query.answer()
+    return await query.edit_message_text(header, reply_markup=keyboard_markup, 
+                                        parse_mode="HTML")
 
 
 async def wallet_msg(update: Update, wallet_name: str, 
-                     wallet: Account, lang:str = "eng"):
+                     wallet_balance:float, addr:str, lang:str = "eng"):
     lang = lang.title()
+    query = update.callback_query
     try: 
-        lang_cls = getattr(WalletsMenu, lang)
+        lang_cls = getattr(WalletMenu, lang)
         keyboard = lang_cls.keyboard
     except AttributeError:
         raise AttributeError(f"{lang} lang not found for wallet menu")
-    lang_obj = await lang_cls(wallet_name, wallet)
+    lang_obj = await lang_cls(wallet_name = wallet_name, 
+                              wallet_balance = wallet_balance, addr = addr)
     header = lang_obj.header
     keyboard_markup = InlineKeyboardMarkup(keyboard)
     # parsmode MarkdownV2 or HTML
-    return update.message.reply_text(header, reply_markup=keyboard_markup,
-                                     parse_mode="HTML")
+    query.answer()
+    return await query.edit_message_text(header, reply_markup=keyboard_markup,
+                                   parse_mode="HTML")
     
     
         
