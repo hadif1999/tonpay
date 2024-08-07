@@ -9,9 +9,7 @@ from telegram.ext import (
 
 from .messages import MainMenu_msg, wallets_msg, FinanceMenu_msg, wallet_msg
 import os
-from tonpay.database.Models import (User,
-                            #  External_Wallet, Internal_Wallet,
-                              add_row)
+from tonpay.database.Models import (User, Wallet, insert_row)
 from sqlmodel import select
 from loguru import logger
 from ton.account import Account
@@ -32,7 +30,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user: User = await User.get(chat_id)
     if not user: 
         new_user = User(chat_id = chat_id)
-        await add_row(new_user, True)
+        await insert_row(new_user, True)
         new_user._logger.debug("user added")
     else: 
         user._logger.debug("user already exists")
@@ -42,24 +40,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = str(update.effective_user.id)
     query = update.callback_query # getting input query
-    user: User = await User.get(chat_id)
-    # toDo: get balance by single unit e.g = "nTON"             
-    internal_wallets_balance = sum(user.get_wallets("balance", "internal"))
-    external_wallets_balance = sum([(await wal.get_balance())
-                                    for wal in user.get_wallets(wallet_type="external")])
-    balance_ton = internal_wallets_balance + external_wallets_balance
+    user: User = await User.get(chat_id)          
+    balance_ton = 0
+    balance_USDT = 0
+    for wallet in user.wallets:
+        if wallet.unit == "TON": 
+            balance_ton += wallet.balance # just ton balance
+        balance_USDT += wallet.balance_USDT # balance for all wallets 
     user._logger.debug(f"balance calculated: {balance_ton}")
-    # toDo: get_online price by ccxt and update Ton price in dollar
-    balance_dollar = balance_ton
     await query.answer()
-    await FinanceMenu_msg(update, LANG, balance_ton, balance_dollar )
+    await FinanceMenu_msg(update, LANG, balance_ton, balance_USDT)
     return MAIN_ROUTE
     
     
 async def wallets(update: Update, context):
     chat_id = str(update.effective_user.id)
     user: User = await User.get(chat_id)
-    _wallets = {wal.name:wal for wal in user.get_wallets()} 
+    _wallets = await user.dump_wallets(asjson=True, include_fields=["address"])
     user._logger.debug("fetched user wallets: {wallets}", wallets=list(_wallets.keys()) )
     await wallets_msg(update, _wallets, LANG)
     return MAIN_ROUTE
@@ -71,13 +68,9 @@ async def wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = str(update.effective_user.id)
     user: User = await User.get(chat_id)
     _logger = user._logger
-    wallets = [wal for wal in user.get_wallets() if wal.name == wallet_name ]
-    if wallets == []: 
-        _logger.error(f"wallet {wallet_name} not found in user wallets")
-        return
-    _wallet = wallets[0]
+    _wallet: Wallet = (await user.dump_wallets())[wallet_name]
     _logger.debug("fetched user wallet: {wallet}", wallet=_wallet.name )
-    await wallet_msg(update, wallet_name, 0, _wallet.address, LANG)
+    await wallet_msg(update, wallet_name, _wallet.balance, _wallet.address, LANG)
     return MAIN_ROUTE
 
 

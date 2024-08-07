@@ -12,7 +12,8 @@
 		{"name": "TONNAPAY",
 		"log_level": "DEBUG",
 		"isprod": false,
-		"language": "eng"},
+		"language": "eng", 
+		"datetime_format": "%Y-%m-%y_%H:%M:%S"},
 
 	"telegram":
 		{	

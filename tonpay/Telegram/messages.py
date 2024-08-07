@@ -2,6 +2,7 @@
 from telegram import InlineKeyboardMarkup, Update
 from .styles import MainMenu, FinanceMenu, WalletsMenu, WalletMenu
 from ton.account import Account
+from typing import Annotated
 
 
 def MainMenu_msg(update: Update, lang:str = "eng"):
@@ -33,8 +34,10 @@ def FinanceMenu_msg(update: Update, lang:str = "eng", balance:str|float = 0,
                                                  balance_dollar=balance_dollar),
                                                  reply_markup=keyboard_markup)
     
-    
-async def wallets_msg(update: Update, wallets: dict[str, Account], lang:str = "eng"):
+
+ADDRESS = Annotated[str, "wallet address"]
+NAME = Annotated[str, "wallet name"]
+async def wallets_msg(update: Update, wallets: dict[NAME, ADDRESS], lang:str = "eng"):
     lang = lang.title()
     query = update.callback_query
     try: 
