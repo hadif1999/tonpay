@@ -46,3 +46,17 @@ def generate_keyPairs(bits:int = 2048):
     private_key = key.export_key("DER")
     public_key = key.publickey().export_key("DER")
     return private_key, public_key
+
+
+def toBASE64(input_str: str):
+    import base64 
+    sample_string_bytes = input_str.encode("ascii") 
+    base64_bytes = base64.b64encode(sample_string_bytes) 
+    return base64_bytes
+
+
+def fromBASE64(input_str: str|bytes):
+    import base64
+    if not isinstance(input_str, bytes): input_str = input_str.encode("ascii")
+    res = base64.b64decode(input_str).decode()
+    return res

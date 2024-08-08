@@ -14,6 +14,7 @@ from tonpay import Defaults
 from tonpay.Encryption import Symmetric, SHA256
 from loguru import logger
 from sqlalchemy.orm import selectinload
+from abc import ABC, abstractmethod
 
 
 PLATFORM_NAME = Defaults._platform_name
@@ -36,6 +37,21 @@ def get_symmetric_KEY(**kwargs):
                          datetime=kwargs.get("datetime", ""),
                          salt=kwargs.get("salt", salt), address=kwargs.get("address", ""))
     return KEY
+
+
+
+async def ccxt_ticker_convert(amount:float, src_symbol: str,
+                      target_symbol: str, exchange_name: str = "binance"):
+    from ccxt import async_support as accxt
+    exchange_name = exchange_name.lower()
+    pair = f"{src_symbol}/{target_symbol}".upper()
+    exchange = getattr(accxt, exchange_name)
+    async with exchange() as exch:
+        ticker = await exch.fetchTicker(pair)
+        ticker_price = ticker["last"]
+    value = ticker_price * amount
+    return value
+
 
 
 # note: use __tablename__: str = name_in_database to change table name 
@@ -66,6 +82,7 @@ class User(SQLModel, table=True):
         return logger.bind(chat_id=self.chat_id)
     
     
+    @staticmethod
     async def get(chat_id: str|int):
         chat_id = str(chat_id)
         async with AsyncSession(ASYNC_ENGINE) as session:
@@ -155,38 +172,104 @@ class Wallet(SQLModel, table=True):
     user: User = Relationship(back_populates="wallets")
     
     
-    @property
-    def balance(self) -> float:
-        # toDo: refresh wallet ( balance , unit, etc)
-        # return wallet_detail.balance
-        pass
+    @property # self.Wallet_Detail_ID keeps wallet detail data
+    async def wallet_detail_id(self)->int: 
+        wallet_detail_ID_attr = "_Wallet_Detail_ID"
+        _wallet_detail_id = getattr(self, wallet_detail_ID_attr, None)
+        if not _wallet_detail_id:
+            detail_table = get_table_by_blockchain(self.type)
+            query = select(detail_table).where(self.id == detail_table.wallet_id, 
+                                               self.type == detail_table.type)
+            async with AsyncSession(ASYNC_ENGINE) as session: 
+                _wallet_detail_id = (await session.exec(query)).one().id
+            setattr(self, wallet_detail_ID_attr, _wallet_detail_id)
+        return _wallet_detail_id
     
     
     @property
-    def balance_USDT(self) -> float:
-        # return toUSDT(self.balance)
-        pass
+    async def wallet_detail(self)-> "WalletDetailType":
+        wallet_detail_id: int = await self.wallet_detail_id
+        async with AsyncSession(ASYNC_ENGINE) as session:
+            detail_table = get_table_by_blockchain(self.type)
+            wallet_detail = session.get(detail_table, wallet_detail_id)
+        return wallet_detail
+        
+        
+    
+    @property
+    async def balance(self) -> float:
+        wallet_detail = await self.wallet_detail
+        return await wallet_detail.get_balance()
     
     
     @property
-    def unit(self) -> str:
-        # toDo: return wallet unit
-        pass
+    async def balance_USDT(self) -> float:
+        wallet_detail = await self.wallet_detail
+        return await wallet_detail.get_balance_USDT()
     
     
-    def change_name(self, new_name) -> bool:
+    @property
+    async def unit(self) -> str:
+        wallet_detail = await self.wallet_detail
+        return await wallet_detail.get_unit()
+    
+    
+    async def change_name(self, new_name) -> bool:
         # check in name if not repeated in other wallets
-        # wallet.name = new_name
+        assert new_name not in await self.user.dump_wallets(), "the new name is not unique"
+        self.name = new_name
+        return True
+    
+    
+    @property
+    async def address(self):
+        wallet_detail = await self.wallet_detail
+        return await wallet_detail.get_address()
+    
+    
+class WalletDetail_ABC(ABC): # abstract class for WalletDetail classes
+    @abstractmethod
+    async def get_balance(self):
+        pass
+    
+    @abstractmethod
+    async def get_balance_USDT(self):
+        pass
+    
+    @abstractmethod
+    async def get_unit(self):
+        pass
+    
+    @abstractmethod
+    async def get_address(self):
+        pass
+    
+    @abstractmethod
+    @property
+    async def refresh(self):
         pass
     
     
     @property
-    def address(self):
-        pass
+    async def user_id(self) -> int:
+        userID_atrr = "_userID"
+        ID = getattr(self, userID_atrr, None)
+        if not ID:
+            async with AsyncSession(ASYNC_ENGINE) as session: 
+                ID = session.get(Wallet, self.wallet_id).user_id
+            setattr(self, userID_atrr, ID)
+        return ID
+    
+    
+    @property
+    async def user(self) -> User:
+        async with AsyncSession(ASYNC_ENGINE) as session:
+            user = session.get(User, self.user_id)
+            return user
         
         
 # wallet on blockchain
-class TON_Wallet(SQLModel, table=True):
+class TON_Wallet(SQLModel, WalletDetail_ABC, table=True):
     id: Optional[int] = Field(primary_key=True, default=None)
     address: str = Field(unique=True, min_length=10, max_length=200)
     path: str = Field(unique=True, # SHA256(chat_id:date_created("Y-M-D_H:MM:S"):salt)
@@ -196,21 +279,54 @@ class TON_Wallet(SQLModel, table=True):
     balance: PositiveFloat = Field(default=0)
     unit: str = Field(default="TON", const=True) # balance unit in TON
     wallet_id: int|None = Field(default=None, foreign_key="wallet.id") 
+            
+    
+    @property
+    async def refresh(self):
+        # refresh balance and unit if needed
+        path = await self.decrypt_path
+        from tonpay.wallets.blockchain.TON import Wallet
+        # passwd = self.user.password ??????????? # toDo: can we add password to wallet?
+        wallet = await Wallet.find_wallet(path)
+        self.balance = await wallet.get_balance() # balance in TON
+        return True
     
     
-    def refresh(self):
-        # toDo: refresh balance and unit if needed
+    async def get_balance(self):
+        await self.refresh
+        return self.balance
+    
+    
+    async def get_balance_USDT(self): 
+        await self.refresh
+        return ??? toUSDT(self.balance)
+    
+    
+    @staticmethod
+    async def import_wallet(seeds: str):
         pass
+    
+    
+    async def get_address(self):
+        return self.address
+    
+    
+    async def get_unit(self):
+        return self.unit
     
     
     @property
-    def decrypt_path(self) -> str:
-        # decrypt seeds and return
-        pass
+    async def decrypt_path(self) -> str:
+        # decrypt path and return
+        user = await self.user
+        KEY = get_symmetric_KEY(datetime=self.enc_date, chat_id= user.chat_id,
+                                address=self.address)
+        path_org = Symmetric(KEY).decrypt(self.path)
+        return path_org
 
 
 # wallet inside the platform
-class Internal_Wallet(SQLModel, table=True):
+class Internal_Wallet(SQLModel, WalletDetail_ABC, table=True):
     id: Optional[int] = Field(primary_key=True, default=None)
     balance: PositiveFloat = Field(default=0) # holds theter or TON
     # this address can't be used in any transaction
@@ -223,17 +339,33 @@ class Internal_Wallet(SQLModel, table=True):
     
     
     @property
-    def balance_USDT(self):
+    async def refresh(self):
         pass
     
     
-    @property
-    def balance(self):
+    async def get_balance_USDT(self):
+        await self.refresh
+        # return toUSDT(self.balance)
         pass
     
     
-    def change_unit(unit: str):
+    async def get_balance(self):
+        await self.refresh
+        return self.balance
+    
+    
+    def change_unit(unit: Literal["USDT", "TON", "BTC"]):
+        # change balance value in new unit 
+        # ch unit in db
         pass
+    
+    
+    async def get_unit(self):
+        return self.unit
+    
+    
+    async def get_address(self):
+        return self.address
     
     
 class WalletDetailType(Internal_Wallet):

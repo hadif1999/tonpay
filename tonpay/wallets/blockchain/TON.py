@@ -91,7 +91,7 @@ async def test():
     print(f"address = {addr}")
     seeds = await wallet.get_seeds()
     print(f"seeds = {seeds}")
-    path = await wallet.get_path()
+    path = await wallet.get_path() # wallet path in base64
     print(f"path = {path}")
     balance = await wallet.get_balance()
     print(f"balance = {balance}")

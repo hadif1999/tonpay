@@ -53,6 +53,7 @@ async def wallets_msg(update: Update, wallets: dict[NAME, ADDRESS], lang:str = "
                                         parse_mode="HTML")
 
 
+
 async def wallet_msg(update: Update, wallet_name: str, 
                      wallet_balance:float, addr:str, lang:str = "eng"):
     lang = lang.title()
