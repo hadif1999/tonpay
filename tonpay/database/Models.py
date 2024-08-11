@@ -15,11 +15,12 @@ from tonpay.Encryption import Symmetric, SHA256
 from loguru import logger
 from sqlalchemy.orm import selectinload
 from abc import ABC, abstractmethod
+from tonpay.utils.ccxt import convert_ticker
 
 
 PLATFORM_NAME = Defaults._platform_name
 
-def get_table_by_blockchain(blockchain: Defaults.types.BLOCKCHAIN|None) -> "TON_Wallet"|"Internal_Wallet":
+def get_table_by_blockchain(blockchain: Defaults.types.BLOCKCHAIN|None) -> "WalletDetailType":
     tables_by_blockchain = {
         "TON": TON_Wallet,
         # "BNB": BNB_Wallet, 
@@ -33,25 +34,10 @@ def get_symmetric_KEY(**kwargs):
     KEY_cls = Defaults.formats.Symm_KEY
     KEY_raw, salt = KEY_cls.key_fmt, KEY_cls.salt
     # generating encryption Symmetric KEY
-    KEY = KEY_raw.format(chat_id=kwargs.get("chat_id", ""),
+    KEY = KEY_raw.format(user_id=kwargs.get("user_id", ""),
                          datetime=kwargs.get("datetime", ""),
                          salt=kwargs.get("salt", salt), address=kwargs.get("address", ""))
     return KEY
-
-
-
-async def ccxt_ticker_convert(amount:float, src_symbol: str,
-                      target_symbol: str, exchange_name: str = "binance"):
-    from ccxt import async_support as accxt
-    exchange_name = exchange_name.lower()
-    pair = f"{src_symbol}/{target_symbol}".upper()
-    exchange = getattr(accxt, exchange_name)
-    async with exchange() as exch:
-        ticker = await exch.fetchTicker(pair)
-        ticker_price = ticker["last"]
-    value = ticker_price * amount
-    return value
-
 
 
 # note: use __tablename__: str = name_in_database to change table name 
@@ -66,7 +52,7 @@ async def insert_row(row: SQLModel, do_refresh:bool = True):
 
 class User(SQLModel, table=True):
     id: int|None = Field(primary_key=True, default=None)
-    chat_id: str = Field(index=True, unique=True, 
+    user_id: str = Field(index=True, unique=True, 
                          min_length=5, max_length=100)
     email: EmailStr|None = Field(min_length=5, max_length=200,
                                  unique=True, default=None)
@@ -79,15 +65,15 @@ class User(SQLModel, table=True):
     
     @property
     def _logger(self):
-        return logger.bind(chat_id=self.chat_id)
+        return logger.bind(user_id=self.user_id)
     
     
     @staticmethod
-    async def get(chat_id: str|int):
-        chat_id = str(chat_id)
+    async def get(user_id: str|int):
+        user_id = str(user_id)
         async with AsyncSession(ASYNC_ENGINE) as session:
             res = await session.exec( select(__class__)
-                                     .where(__class__.chat_id == chat_id)
+                                     .where(__class__.user_id == user_id)
                                      .options(selectinload(__class__.wallets)))
             user = res.first()
         return user
@@ -101,7 +87,7 @@ class User(SQLModel, table=True):
         _logger = self._logger
         if self.wallets == []:
             _logger.debug(f"no wallets defined yet")
-            return
+            {}
         wallets_dump = {}
         wallets_dump_ls = []
         for wallet in self.wallets:
@@ -142,10 +128,10 @@ class User(SQLModel, table=True):
         dt_now = dt.datetime.now(dt.UTC)
         dt_now_str = dt_now.strftime(Defaults._datetime_fmt_encryption)
         Name = name or name_fmt.format(name = Type if Type else PLATFORM_NAME,
-                                       ID = self.chat_id, 
+                                       ID = self.user_id, 
                                        datetime = dt_now_str) 
         _logger.debug(f"naming new wallet as {Name}")
-        KEY = get_symmetric_KEY(chat_id=self.chat_id, 
+        KEY = get_symmetric_KEY(user_id=self.user_id, 
                                 datetime=dt_now_str,
                                 address=address)
         _logger.debug(f"generated symm KEY: {KEY}")
@@ -160,14 +146,50 @@ class User(SQLModel, table=True):
                                          wallet_id=new_wallet.id)
         await insert_row(new_wallet_detail)
         return True
+    
+    
+    async def import_wallet(self, Type:Defaults.types.BLOCKCHAIN|None,
+                            seeds: str, name: str|None = None, **kwargs):
+        if not Type: return # can only import external wallets 
+        _logger = self._logger
+        import importlib
+        Type = Type.upper()
+        blockchain = importlib.import_module(f"tonpay.wallets.blockchain.{Type}")
+        Wallet_cls = getattr(blockchain, "Wallet") # get wallet from blockchain
+        wallet = await Wallet_cls.import_wallet_bySeeds(seeds, **kwargs)
+        balance = await wallet.get_balance()
+        addr = await wallet.get_address()
+        path_raw = await wallet.get_path()
+        dt_now = dt.datetime.now(dt.UTC)
+        dt_now_str = dt_now.strftime(Defaults._datetime_fmt_encryption)
+        KEY = get_symmetric_KEY(user_id=self.user_id, datetime=dt_now_str, address=addr)
+        path_enc = Symmetric(KEY).encrypt(path_raw)
+        wallet_names = (await self.dump_wallets()).keys()
+        if name and name in wallet_names:
+            _logger.error("specified name already taken by user wallets")
+            return
+        name_fmt = Defaults.formats.wallet_name
+        Name = name or name_fmt.format(name = Type if Type else PLATFORM_NAME,
+                                       ID = self.user_id, 
+                                       datetime = dt_now_str) 
+        wallet_db = Wallet(name=Name, date_created=dt_now, type=Type, user_id=self.id)
+        await insert_row(wallet_db)
+        detail_table: WalletDetailType = get_table_by_blockchain(Type)
+        wallet_detail = detail_table(address=addr, path=path_enc,
+                                     type=Type, enc_date=dt_now,
+                                     balance=balance, unit=Type,
+                                     wallet_id=wallet_db.id)
+        await insert_row(wallet_detail)
+        return True
+        
             
             
 class Wallet(SQLModel, table=True):
     id: Optional[int] = Field(primary_key=True, default=None)
     name:str = Field(min_length=5, max_length=200)
     date_created: dt.datetime = Field(default=dt.datetime.now(dt.UTC))
-    type: Defaults.types.BLOCKCHAIN | None = Field(default="TON", min_length=3,
-                                                     max_length=4)
+    # type: Defaults.types.BLOCKCHAIN | None = Field(default="TON", min_length=3,
+    #                                                  max_length=4)
     user_id: int|None = Field(default=None, foreign_key="user.id")
     user: User = Relationship(back_populates="wallets")
     
@@ -245,7 +267,6 @@ class WalletDetail_ABC(ABC): # abstract class for WalletDetail classes
         pass
     
     @abstractmethod
-    @property
     async def refresh(self):
         pass
     
@@ -272,7 +293,7 @@ class WalletDetail_ABC(ABC): # abstract class for WalletDetail classes
 class TON_Wallet(SQLModel, WalletDetail_ABC, table=True):
     id: Optional[int] = Field(primary_key=True, default=None)
     address: str = Field(unique=True, min_length=10, max_length=200)
-    path: str = Field(unique=True, # SHA256(chat_id:date_created("Y-M-D_H:MM:S"):salt)
+    path: str = Field(unique=True, # SHA256(user_id:date_created("Y-M-D_H:MM:S"):salt)
                        min_length=10, max_length=1000)
     type:str = Field("TON", const= True)
     enc_date: dt.datetime = Field(default=dt.datetime.now(dt.UTC))# encryption time 
@@ -299,12 +320,9 @@ class TON_Wallet(SQLModel, WalletDetail_ABC, table=True):
     
     async def get_balance_USDT(self): 
         await self.refresh
-        return ??? toUSDT(self.balance)
-    
-    
-    @staticmethod
-    async def import_wallet(seeds: str):
-        pass
+        balance = self.balance
+        balance_usdt = convert_ticker(balance, self.type, "USDT")
+        return balance_usdt
     
     
     async def get_address(self):
@@ -319,22 +337,22 @@ class TON_Wallet(SQLModel, WalletDetail_ABC, table=True):
     async def decrypt_path(self) -> str:
         # decrypt path and return
         user = await self.user
-        KEY = get_symmetric_KEY(datetime=self.enc_date, chat_id= user.chat_id,
+        KEY = get_symmetric_KEY(datetime=self.enc_date, user_id= user.user_id,
                                 address=self.address)
         path_org = Symmetric(KEY).decrypt(self.path)
         return path_org
 
 
 # wallet inside the platform
-class Internal_Wallet(SQLModel, WalletDetail_ABC, table=True):
+class Internal_Wallet(SQLModel, table=True):
     id: Optional[int] = Field(primary_key=True, default=None)
     balance: PositiveFloat = Field(default=0) # holds theter or TON
     # this address can't be used in any transaction
-    address: str = Field(unique=True,  # SHA256(chat_id:date_created("Y-M-D_H:MM:S"))
+    address: str = Field(unique=True,  # SHA256(user_id:date_created("Y-M-D_H:MM:S"))
                          min_length=10, max_length=1000)
     enc_date: dt.datetime = Field(default=dt.datetime.now(dt.UTC))# encryption time 
-    type: None = Field(None, const=True)
-    unit: Literal["USDT", "TON", "BTC"] = Field(default="USDT", min_length=3, max_length=4)
+    # type: None = Field(None, const=True)
+    # unit: Literal["USDT", "TON", "BTC"] = Field(default="USDT", min_length=3, max_length=4)
     wallet_id: int|None = Field(default=None, foreign_key="wallet.id")
     
     
@@ -345,8 +363,8 @@ class Internal_Wallet(SQLModel, WalletDetail_ABC, table=True):
     
     async def get_balance_USDT(self):
         await self.refresh
-        # return toUSDT(self.balance)
-        pass
+        balance_usdt = await convert_ticker(self.balance, self.unit, "USDT")
+        return balance_usdt
     
     
     async def get_balance(self):
@@ -354,10 +372,15 @@ class Internal_Wallet(SQLModel, WalletDetail_ABC, table=True):
         return self.balance
     
     
-    def change_unit(unit: Literal["USDT", "TON", "BTC"]):
-        # change balance value in new unit 
-        # ch unit in db
-        pass
+    @validate_call
+    async def change_unit(self, unit: Literal["USDT", "TON", "BTC"]):
+        if self.unit == unit: return
+        # change balance value in new unit
+        balance = await self.get_balance()
+        new_amt = await convert_ticker(balance, self.unit, unit) # balance in new unit
+        self.balance = new_amt
+        self.unit = unit
+        return True
     
     
     async def get_unit(self):
@@ -375,14 +398,14 @@ class WalletDetailType(Internal_Wallet):
 
 # class Transaction_Side(SQLModel):
 # #     address: str = Field(min_length=10, max_length=1000)
-# #     chat_id: str = Field(min_length=10, max_length=100)
+# #     user_id: str = Field(min_length=10, max_length=100)
 
 
-# Transaction_QueryType = Literal["chat_id", "address"]
+# Transaction_QueryType = Literal["user_id", "address"]
 # class Transaction(SQLModel, table=True):
 #     id: int|None = Field(primary_key=True, default=None)
-#     src: Transaction_Side = Field(sa_column=Field(JSON)) # "src":{"address": --- , "chat_id": --- }
-#     dest: Transaction_Side = Field(sa_column=Field(JSON))  # "dest":{"address":---, "chat_id": --- }
+#     src: Transaction_Side = Field(sa_column=Field(JSON)) # "src":{"address": --- , "user_id": --- }
+#     dest: Transaction_Side = Field(sa_column=Field(JSON))  # "dest":{"address":---, "user_id": --- }
 #     amount: PositiveFloat = Field(gt=0)
 #     status: Literal["pending", "failed", "success"] = Field(default="pending", max_length=10)
 #     datetime: dt.datetime = Field(default=dt.datetime.now(dt.UTC))

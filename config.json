@@ -1,6 +1,6 @@
 {
 	"wallet_encryption":{
-		"SYMMETRIC_KEY": "{chat_id}:{datetime}:{salt}",
+		"SYMMETRIC_KEY": "{user_id}:{datetime}:{salt}",
 		"salt":"1378Hadi@Tonpay",
 		"datetime_format": "%Y-%m-%y_%H:%M:%S"
 	},

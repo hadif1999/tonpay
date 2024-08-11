@@ -5,7 +5,7 @@ from ton.account import Account
 from typing import Annotated
 
 
-def MainMenu_msg(update: Update, lang:str = "eng"):
+def MainMenu_msg(update: Update, lang:str = "eng", edit_current: bool = False):
     lang = lang.title()
     try: 
         lang_cls = getattr(MainMenu, lang)
@@ -14,7 +14,12 @@ def MainMenu_msg(update: Update, lang:str = "eng"):
     except AttributeError:
         raise AttributeError(f"{lang} lang not found for main menu")
     keyboard_markup = InlineKeyboardMarkup(keyboard)
-    return update.message.reply_text(header, reply_markup=keyboard_markup)
+    def edit_query(update: Update): 
+        query = update.callback_query
+        return query.edit_message_text(header, reply_markup=keyboard_markup)
+    def new_msg(update: Update):
+        return update.message.reply_text(header, reply_markup=keyboard_markup)
+    return edit_query(update) if edit_current else new_msg(update)
 
 
 def FinanceMenu_msg(update: Update, lang:str = "eng", balance:str|float = 0,

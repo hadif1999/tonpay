@@ -13,9 +13,9 @@ fmt = (
     "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
     "<level>{level: <8}</level> | "
     "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
-    "chat_id: {extra[chat_id]} - <level>{message}</level>"
+    "user_id: {extra[user_id]} - <level>{message}</level>"
 )
-logger.configure(extra={"chat_id": ""})  # Default values
+logger.configure(extra={"user_id": ""})  # Default values
 logger.remove(None) # removing all loggers
 isprod: bool = config["general"].get("isprod", False)
 diagnose = False if isprod else True
@@ -29,7 +29,7 @@ logger.add(sink, level=log_level,
            enqueue=True, rotation="500 MB")
 logger.add("logs/telegram_{time:YYYY-MM-DD_HH:mm:ss}.log", level=log_level,
            diagnose=diagnose, backtrace=True, 
-           filter= lambda rec: "chat_id" in rec["extra"] and rec["extra"]["chat_id"] != "")
+           filter= lambda rec: "user_id" in rec["extra"] and rec["extra"]["user_id"] != "")
 logger.add(sys.stdout, level=log_level,
            diagnose=diagnose, backtrace=True, format=fmt)
 

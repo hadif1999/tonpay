@@ -62,6 +62,13 @@ class Wallet:
     @logger.catch
     async def get_path(self):
         return self.__wallet.path
+    
+    
+    @staticmethod
+    async def import_wallet_bySeeds(seeds: str, **kwargs):
+        client = await get_client()
+        _wallet = await client.import_wallet(seeds, **kwargs)
+        return Wallet(_wallet)
         
         
     @logger.catch
