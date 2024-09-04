@@ -333,7 +333,7 @@ class TON_Wallet(SQLModel, WalletDetail_ABC, table=True):
     async def get_balance_USDT(self): 
         await self.refresh
         balance = self.balance
-        balance_usdt = convert_ticker(balance, self.type, "USDT")
+        balance_usdt = await convert_ticker(balance, self.type, "USDT")
         return balance_usdt
     
     
