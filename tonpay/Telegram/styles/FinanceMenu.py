@@ -19,8 +19,8 @@ def render_keyboard(refresh_txt:str, wallets_txt:str, transactions_txt:str,
 
 class Eng:
     header = """📈 Finance Dashboard
-    total balance: 
-{balance} TON ~ {balance_dollar} USDT"""
+    <b>total balance</b>: 
+{balance} <b>TON</b> ~ {balance_dollar} <b>USDT</b>"""
     keyboard = render_keyboard("Refresh", "Wallets", "Transactions", 
                                "Equity chart", "Payment Gateway", bhk("Back", "Home"))
     

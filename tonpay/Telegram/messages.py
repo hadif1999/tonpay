@@ -3,6 +3,7 @@ from telegram import InlineKeyboardMarkup, Update
 from .styles import MainMenu, FinanceMenu, WalletsMenu, WalletMenu
 from ton.account import Account
 from typing import Annotated
+from telegram.constants import ParseMode
 
 
 def MainMenu_msg(update: Update, lang:str = "eng", edit_current: bool = False):
@@ -37,7 +38,8 @@ def FinanceMenu_msg(update: Update, lang:str = "eng", balance:str|float = 0,
     query = update.callback_query 
     return query.edit_message_text(header.format(balance=balance,
                                                  balance_dollar=balance_dollar),
-                                                 reply_markup=keyboard_markup)
+                                                 reply_markup=keyboard_markup,
+                                                 parse_mode=ParseMode.HTML)
     
 
 ADDRESS = Annotated[str, "wallet address"]
@@ -55,7 +57,7 @@ async def wallets_msg(update: Update, wallets: dict[NAME, ADDRESS], lang:str = "
     keyboard_markup = InlineKeyboardMarkup(keyboard)
     await query.answer()
     return await query.edit_message_text(header, reply_markup=keyboard_markup, 
-                                        parse_mode="HTML")
+                                        parse_mode=ParseMode.HTML)
 
 
 
@@ -75,7 +77,7 @@ async def wallet_msg(update: Update, wallet_name: str,
     # parsmode MarkdownV2 or HTML
     query.answer()
     return await query.edit_message_text(header, reply_markup=keyboard_markup,
-                                   parse_mode="HTML")
+                                         parse_mode=ParseMode.HTML)
     
     
         

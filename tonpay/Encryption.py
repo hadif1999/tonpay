@@ -1,10 +1,12 @@
 class Symmetric:
     def __init__(self, key: str) -> None:
         from wolfcrypt.ciphers import Aes, MODE_CBC
+        max_len = 16
+        if len(key) > max_len: key = key[:max_len]
         self.cipher = Aes(key, MODE_CBC, key)
        
         
-    def encrypt(self, input_str: str):
+    def encrypt(self, input_str: str)-> bytes:
         while len(input_str)%16 != 0: input_str += ' '
         enc_text = self.cipher.encrypt(input_str)
         return enc_text

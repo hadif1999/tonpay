@@ -3,6 +3,7 @@ from tonpay import config
 import os
 from dataclasses import dataclass
 from typing import Literal
+from enum import Enum
 
 _max_user_demo_wallets = config["user"].get("max_wallets", 5)
 _datetime_fmt = config["general"].get("datetime_format", "%Y-%m-%y_%H:%M:%S")
@@ -12,6 +13,10 @@ _key_fmt = config["wallet_encryption"]["SYMMETRIC_KEY"]
 _platform_name = config["general"]["name"]
 _lang = config["general"].get("language", "eng")
 _telegram_lang = config["telegram"].get("language", _lang)
+class Blockchain_enum(str, Enum):
+        TON = "TON"
+        ETH = "ETH"
+        BNB = "BNB"
 
 @dataclass
 class formats:
@@ -35,6 +40,6 @@ class options:
         
 @dataclass
 class types:
-    BLOCKCHAIN = Literal["TON", "ETH", "BNB"]
+    BLOCKCHAIN = Blockchain_enum
          
     

@@ -16,6 +16,7 @@ from loguru import logger
 from sqlalchemy.orm import selectinload
 from abc import ABC, abstractmethod
 from tonpay.utils.ccxt import convert_ticker
+from enum import Enum
 
 
 PLATFORM_NAME = Defaults._platform_name
@@ -51,6 +52,8 @@ async def insert_row(row: SQLModel, do_refresh:bool = True):
     
 
 class User(SQLModel, table=True):
+    __tablename__ = "_user"
+    
     id: int|None = Field(primary_key=True, default=None)
     user_id: str = Field(index=True, unique=True, 
                          min_length=5, max_length=100)
@@ -69,7 +72,7 @@ class User(SQLModel, table=True):
     
     
     @staticmethod
-    async def get(user_id: str|int):
+    async def get(user_id: str|int) -> "User":
         user_id = str(user_id)
         async with AsyncSession(ASYNC_ENGINE) as session:
             res = await session.exec( select(__class__)
@@ -83,7 +86,7 @@ class User(SQLModel, table=True):
     @validate_call
     async def dump_wallets(self, asjson: bool = False, *, 
                            include_fields: list[str]|None = None,
-                           exclude_fields: list[str]|None = None, nameAsKey: bool = True):
+                           exclude_fields: list[str]|None = None, nameAsKey: bool = True)-> dict[str, Any]:
         _logger = self._logger
         if self.wallets == []:
             _logger.debug(f"no wallets defined yet")
@@ -110,13 +113,17 @@ class User(SQLModel, table=True):
                 
         
     @logger.catch
-    @validate_call
     async def add_wallet(self, *, name:str|None = None,
-                         address:str, path:str, Type:Defaults.types.BLOCKCHAIN|None,
+                         address:str = '', path:str = '', 
+                         Type:Defaults.types.BLOCKCHAIN|None,
                          balance: float = 0, unit:str|None = None,
                          throw_exp: bool = False):
         _logger = self._logger
-        allowed = len(self.wallets) <= self.max_allowed_wallets
+        async with AsyncSession(ASYNC_ENGINE) as session: # load self.wallets into memory
+            _self = await session.merge(self)
+            await session.refresh(_self)
+            wallets = _self.wallets
+        allowed = len(wallets) <= self.max_allowed_wallets
         _logger.debug(f"num max_allowed user's wallets:{self.max_allowed_wallets}")
         if throw_exp: assert allowed, "max wallets reached"
         wallet_names = list( (await self.dump_wallets()).keys() )
@@ -125,7 +132,7 @@ class User(SQLModel, table=True):
             _logger.error("specified name already taken by user wallets")
             return
         name_fmt = Defaults.formats.wallet_name
-        dt_now = dt.datetime.now(dt.UTC)
+        dt_now = dt.datetime.now()
         dt_now_str = dt_now.strftime(Defaults._datetime_fmt_encryption)
         Name = name or name_fmt.format(name = Type if Type else PLATFORM_NAME,
                                        ID = self.user_id, 
@@ -135,17 +142,24 @@ class User(SQLModel, table=True):
                                 datetime=dt_now_str,
                                 address=address)
         _logger.debug(f"generated symm KEY: {KEY}")
-        path_enc = Symmetric(KEY).encrypt(path)
-        _logger.debug(f"encrypted seeds for external wallet: {path_enc}")
         new_wallet = Wallet(name = Name, type=Type, user_id=self.id)
         await insert_row(new_wallet)
-        wallet_table: WalletDetailType = get_table_by_blockchain(Type)
-        new_wallet_detail = wallet_table(address=address, path=path_enc,
-                                         type=Type, enc_time=dt_now, 
-                                         balance=balance, unit=unit,
-                                         wallet_id=new_wallet.id)
-        await insert_row(new_wallet_detail)
-        return True
+        if Type: # if is external wallet
+            path_enc = Symmetric(KEY).encrypt(path)
+            _logger.debug(f"encrypted seeds for external wallet: {path_enc}")
+            wallet_table: WalletDetailType = get_table_by_blockchain(Type)
+            new_wallet_detail = wallet_table(address=address, path=path_enc,
+                                            type=Type, enc_time=dt_now, 
+                                            balance=balance, unit=unit,
+                                            wallet_id=new_wallet.id)
+            return await insert_row(new_wallet_detail)
+        else: # if is internal wallet
+            from random import randint
+            addr_raw = KEY + f":{randint(30001, 999999)}"
+            address = SHA256(addr_raw)
+            internal_wallet_detail = Internal_Wallet(balance=balance, address=address,
+                                                enc_date=dt_now, wallet_id=new_wallet.id)
+            return await insert_row(internal_wallet_detail)
     
     
     async def import_wallet(self, Type:Defaults.types.BLOCKCHAIN|None,
@@ -160,7 +174,7 @@ class User(SQLModel, table=True):
         balance = await wallet.get_balance()
         addr = await wallet.get_address()
         path_raw = await wallet.get_path()
-        dt_now = dt.datetime.now(dt.UTC)
+        dt_now = dt.datetime.now()
         dt_now_str = dt_now.strftime(Defaults._datetime_fmt_encryption)
         KEY = get_symmetric_KEY(user_id=self.user_id, datetime=dt_now_str, address=addr)
         path_enc = Symmetric(KEY).encrypt(path_raw)
@@ -181,16 +195,15 @@ class User(SQLModel, table=True):
                                      wallet_id=wallet_db.id)
         await insert_row(wallet_detail)
         return True
-        
-            
-            
+    
+    
 class Wallet(SQLModel, table=True):
     id: Optional[int] = Field(primary_key=True, default=None)
     name:str = Field(min_length=5, max_length=200)
-    date_created: dt.datetime = Field(default=dt.datetime.now(dt.UTC))
-    # type: Defaults.types.BLOCKCHAIN | None = Field(default="TON", min_length=3,
-    #                                                  max_length=4)
-    user_id: int|None = Field(default=None, foreign_key="user.id")
+    date_created: dt.datetime = Field(default=dt.datetime.now())
+    type: Optional[Defaults.types.BLOCKCHAIN] = Field(default=None, 
+                                                      nullable=True)
+    user_id: int|None = Field(default=None, foreign_key="_user.id")
     user: User = Relationship(back_populates="wallets")
     
     
@@ -200,8 +213,7 @@ class Wallet(SQLModel, table=True):
         _wallet_detail_id = getattr(self, wallet_detail_ID_attr, None)
         if not _wallet_detail_id:
             detail_table = get_table_by_blockchain(self.type)
-            query = select(detail_table).where(self.id == detail_table.wallet_id, 
-                                               self.type == detail_table.type)
+            query = select(detail_table).where(self.id == detail_table.wallet_id)
             async with AsyncSession(ASYNC_ENGINE) as session: 
                 _wallet_detail_id = (await session.exec(query)).one().id
             setattr(self, wallet_detail_ID_attr, _wallet_detail_id)
@@ -213,7 +225,7 @@ class Wallet(SQLModel, table=True):
         wallet_detail_id: int = await self.wallet_detail_id
         async with AsyncSession(ASYNC_ENGINE) as session:
             detail_table = get_table_by_blockchain(self.type)
-            wallet_detail = session.get(detail_table, wallet_detail_id)
+            wallet_detail = await session.get(detail_table, wallet_detail_id)
         return wallet_detail
         
         
@@ -277,7 +289,7 @@ class WalletDetail_ABC(ABC): # abstract class for WalletDetail classes
         ID = getattr(self, userID_atrr, None)
         if not ID:
             async with AsyncSession(ASYNC_ENGINE) as session: 
-                ID = session.get(Wallet, self.wallet_id).user_id
+                ID = (await session.get(Wallet, self.wallet_id)).user_id
             setattr(self, userID_atrr, ID)
         return ID
     
@@ -285,7 +297,7 @@ class WalletDetail_ABC(ABC): # abstract class for WalletDetail classes
     @property
     async def user(self) -> User:
         async with AsyncSession(ASYNC_ENGINE) as session:
-            user = session.get(User, self.user_id)
+            user = await session.get(User, await self.user_id)
             return user
         
         
@@ -293,10 +305,10 @@ class WalletDetail_ABC(ABC): # abstract class for WalletDetail classes
 class TON_Wallet(SQLModel, WalletDetail_ABC, table=True):
     id: Optional[int] = Field(primary_key=True, default=None)
     address: str = Field(unique=True, min_length=10, max_length=200)
-    path: str = Field(unique=True, # SHA256(user_id:date_created("Y-M-D_H:MM:S"):salt)
+    path: bytes = Field(unique=True, # SHA256(user_id:date_created("Y-M-D_H:MM:S"):salt)
                        min_length=10, max_length=1000)
     type:str = Field("TON", const= True)
-    enc_date: dt.datetime = Field(default=dt.datetime.now(dt.UTC))# encryption time 
+    enc_date: dt.datetime = Field(default=dt.datetime.now()) # encryption time 
     balance: PositiveFloat = Field(default=0)
     unit: str = Field(default="TON", const=True) # balance unit in TON
     wallet_id: int|None = Field(default=None, foreign_key="wallet.id") 
@@ -343,18 +355,23 @@ class TON_Wallet(SQLModel, WalletDetail_ABC, table=True):
         return path_org
 
 
+class Units_enum(str, Enum):
+    USDT = "USDT"
+    TON = "TON"
+    BTC = "BTC"
 # wallet inside the platform
-class Internal_Wallet(SQLModel, table=True):
+class Internal_Wallet(SQLModel, WalletDetail_ABC, table=True):
     id: Optional[int] = Field(primary_key=True, default=None)
     balance: PositiveFloat = Field(default=0) # holds theter or TON
     # this address can't be used in any transaction
-    address: str = Field(unique=True,  # SHA256(user_id:date_created("Y-M-D_H:MM:S"))
+    address: str = Field(unique=True,  # SHA256(user_id:date_created("Y-M-D_H:MM:S"):randint)
                          min_length=10, max_length=1000)
-    enc_date: dt.datetime = Field(default=dt.datetime.now(dt.UTC))# encryption time 
-    # type: None = Field(None, const=True)
-    # unit: Literal["USDT", "TON", "BTC"] = Field(default="USDT", min_length=3, max_length=4)
+    enc_date: dt.datetime = Field(default=dt.datetime.now())# encryption time 
+    type: Optional[str] = Field(None, const=True)
+    unit: Optional[Units_enum] = Field(default=Units_enum.TON,
+                                       min_length=3, max_length=4)
     wallet_id: int|None = Field(default=None, foreign_key="wallet.id")
-    
+        
     
     @property
     async def refresh(self):
@@ -363,7 +380,8 @@ class Internal_Wallet(SQLModel, table=True):
     
     async def get_balance_USDT(self):
         await self.refresh
-        balance_usdt = await convert_ticker(self.balance, self.unit, "USDT")
+        balance_usdt = await convert_ticker(self.balance, self.unit.value,
+                                            "USDT")
         return balance_usdt
     
     
@@ -408,7 +426,7 @@ class WalletDetailType(Internal_Wallet):
 #     dest: Transaction_Side = Field(sa_column=Field(JSON))  # "dest":{"address":---, "user_id": --- }
 #     amount: PositiveFloat = Field(gt=0)
 #     status: Literal["pending", "failed", "success"] = Field(default="pending", max_length=10)
-#     datetime: dt.datetime = Field(default=dt.datetime.now(dt.UTC))
+#     datetime: dt.datetime = Field(default=dt.datetime.now())
 #     transaction_id: str = Field(unique=True, # SHA256(src.address:dest.address:datetime("Y-M-D_H:MM:S"))
 #                                 min_length=10, max_length=1000) 
     
