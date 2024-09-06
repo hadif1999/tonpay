@@ -74,18 +74,23 @@ async def wallets_msg(update: Update, wallets: dict[NAME, ADDRESS], lang:str = "
 
 
 
-async def wallet_msg(update: Update, wallet_name: str, 
+async def wallet_msg(update: Update, wallet_name: str, Type: str,
                      wallet_balance:float, addr:str, lang:str = "eng",
                      edit_current: bool = True):
     lang = lang.title()
+    
+    Type = Type.upper() if Type else "Internal" 
+    from tonpay.Defaults import formats
+    explorer_url = getattr(formats.explorer_url, Type, "")
     query = update.callback_query
     try: 
         lang_cls = getattr(WalletMenu, lang)
         keyboard = lang_cls.keyboard
     except AttributeError:
         raise AttributeError(f"{lang} lang not found for wallet menu")
-    lang_obj = await lang_cls(wallet_name = wallet_name, 
-                              wallet_balance = wallet_balance, addr = addr)
+    lang_obj = lang_cls(wallet_name = wallet_name, 
+                        balance = wallet_balance, addr = addr, 
+                        explorer_url = explorer_url)
     header = lang_obj.header
     keyboard_markup = InlineKeyboardMarkup(keyboard)
     # parsmode MarkdownV2 or HTML

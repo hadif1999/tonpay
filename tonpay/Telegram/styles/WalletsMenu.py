@@ -18,7 +18,7 @@ def render_keyboard(wallets: dict[NAME, ADDRESS], name_txt:str = "Name",
     for name, data in wallets.items():
         addr = data["address"]
         type = data["type"] or _platform_name
-        callback_data = "wallet_" + name
+        callback_data = "walletname_" + name
         wallet_desc = f"{name_txt}: {name}, {type_txt}: {type}"
         wallets_stack.append([IKB(wallet_desc, callback_data=callback_data)])
         

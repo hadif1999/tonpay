@@ -26,6 +26,8 @@ class formats:
     class Symm_KEY:
         key_fmt: str = _key_fmt
         salt: str = _salt
+    class explorer_url:
+        TON = "https://tonviewer.com/{addr}"
 @dataclass        
 class users:
     class wallets:

@@ -25,7 +25,7 @@ from tonpay.wallets.blockchain.Base import Wallet as BaseWallet
 
 
 # state and page names
-HOME, WALLETS, WALLET, FINANCE, BACK = "home", "wallets", "wallet", "finance", "back"
+HOME, WALLETS, WALLET, FINANCE, BACK = "home", "wallets", "walletname", "finance", "back"
 NEW_WALLET = "new_wallet"
 MAIN_ROUTE, END_ROUTE, NEW_WALLET_ROUTE = 0, 1, 2
 TOKEN = Defaults.options.telegram.token
@@ -33,14 +33,11 @@ LANG = Defaults.options.telegram.lang
 blockchains = ["TON", "BNB", "ETH"]
 
 
+logger.info("starting TONPAY telegram bot")
 class ButtonsHandler:
     # below var stores user last route in conversation
     prev_user_callback = {} # self.prev_user_callback[user_id] = last_callback 
-    __users = {} # self.users["user_id"] = user
-    
-    def __init__(self) -> None:
-        logger.info("starting TONPAY telegram bot")
-        
+    __users = {} # self.users["user_id"] = user        
         
     @logger.catch
     async def finance(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -77,14 +74,19 @@ class ButtonsHandler:
     @logger.catch
     async def wallet(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
-        wallet_name = query.data
+        wallet_name: str = '_'.join(query.data.split('_')[1:])
         user_id = str(update.effective_user.id)
-        user = await self._get_db_user(user_id, update, context)
+        user: User|None = await User.get(user_id)
         if not user: return 
         _logger = user._logger
-        _wallet: Wallet = (await user.dump_wallets())[wallet_name]
+        wallets_dict = await user.dump_wallets()
+        _logger.debug(f"{wallets_dict.keys() = }")
+        _wallet: Wallet = wallets_dict[wallet_name]
         _logger.debug("fetched user wallet: {wallet}", wallet=_wallet.name )
-        await wallet_msg(update, wallet_name, _wallet.balance, _wallet.address, LANG)
+        balance = await _wallet.balance
+        addr = await _wallet.address
+        await wallet_msg(update, wallet_name, _wallet.type,
+                         balance, addr, LANG)
         self.prev_user_callback[user_id] = self.wallets
         return MAIN_ROUTE
     
@@ -248,7 +250,7 @@ def main() -> None:
             MAIN_ROUTE: [
                 CallbackQueryHandler(button_handler.finance, pattern=f"^{FINANCE}$"),
                 CallbackQueryHandler(button_handler.wallets, pattern=f"^{WALLETS}$"),
-                CallbackQueryHandler(button_handler.wallet, pattern=f"^{WALLET}$"),
+                CallbackQueryHandler(button_handler.wallet, pattern=f"^{WALLET}"),
                 CallbackQueryHandler(button_handler.home, pattern=f"^{HOME}$"),
                 CallbackQueryHandler(button_handler.back, pattern=f"^{BACK}$"),
                 CallbackQueryHandler(button_handler.new_wallet, pattern=f"^{NEW_WALLET}$")

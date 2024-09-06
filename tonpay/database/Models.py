@@ -233,7 +233,7 @@ class Wallet(SQLModel, table=True):
     @property
     async def balance(self) -> float:
         wallet_detail = await self.wallet_detail
-        return await wallet_detail.get_balance()
+        return max(0, await wallet_detail.get_balance())
     
     
     @property
@@ -327,7 +327,7 @@ class TON_Wallet(SQLModel, WalletDetail_ABC, table=True):
     
     async def get_balance(self):
         await self.refresh
-        return self.balance
+        return max(0, self.balance)
     
     
     async def get_balance_USDT(self): 
@@ -393,7 +393,7 @@ class Internal_Wallet(SQLModel, WalletDetail_ABC, table=True):
     
     async def get_balance(self):
         await self.refresh
-        return self.balance
+        return max(0, self.balance)
     
     
     @validate_call
