@@ -13,7 +13,8 @@
 		"log_level": "DEBUG",
 		"isprod": false,
 		"language": "eng", 
-		"datetime_format": "%Y-%m-%y_%H:%M:%S"},
+		"datetime_format": "%Y-%m-%y_%H:%M:%S",
+		"blockchains": ["ETH", "BNB", "TON"]},
 
 	"telegram":
 		{	

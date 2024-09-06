@@ -3,7 +3,8 @@ from ton.sync import TonlibClient
 import ton
 from typing import Any, Literal, Annotated
 from loguru import logger
-
+from tonpay.wallets.blockchain.Base import InSufficientBalanceError
+from tonpay.wallets.blockchain.Base import Wallet as BaseWallet
 
 async def get_client():
     client = TonlibClient()
@@ -12,7 +13,7 @@ async def get_client():
     return client
 
 
-class Wallet:
+class Wallet(BaseWallet):
     def __init__(self, wallet):        
         # building client
         client = TonlibClient()
@@ -80,16 +81,6 @@ class Wallet:
                                      self.to_nano(amount),
                                      comment = comment, **kwargs)
         return True
-    
-
-class InSufficientBalanceError(Exception):
-    def __init__(self, msg: str, code: int|None = None) -> None:
-        super().__init__(msg)
-        self.error_code = code
-        
-    def __str__(self) -> str:
-        code = self.error_code
-        return "Error: {self.args[0]}" 
     
 
 async def test():

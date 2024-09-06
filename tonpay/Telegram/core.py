@@ -5,9 +5,12 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     ConversationHandler,
+    MessageHandler,
+    filters
 )
 
-from .messages import MainMenu_msg, wallets_msg, FinanceMenu_msg, wallet_msg
+from .messages import (MainMenu_msg, wallets_msg, FinanceMenu_msg,
+                       wallet_msg, NewWalletType_msg, NewWalletName_msg )
 import os
 from tonpay.database.Models import (User, Wallet, insert_row, TON_Wallet)
 from tonpay.wallets.blockchain.TON import Wallet as TON_Wallet
@@ -16,15 +19,18 @@ from sqlmodel import select
 from loguru import logger
 from ton.account import Account
 from tonpay import Defaults
+from tonpay.utils import Utils
+from tonpay.wallets.blockchain.Base import Wallet as BaseWallet
 
 
 
 # state and page names
 HOME, WALLETS, WALLET, FINANCE, BACK = "home", "wallets", "wallet", "finance", "back"
 NEW_WALLET = "new_wallet"
-MAIN_ROUTE, END_ROUTE = 0, 1
+MAIN_ROUTE, END_ROUTE, NEW_WALLET_ROUTE = 0, 1, 2
 TOKEN = Defaults.options.telegram.token
 LANG = Defaults.options.telegram.lang
+blockchains = ["TON", "BNB", "ETH"]
 
 
 class ButtonsHandler:
@@ -44,23 +50,26 @@ class ButtonsHandler:
         balance_ton = 0
         balance_USDT = 0
         for wallet in user.wallets:
-            if (await wallet.unit) == "TON": 
-                balance_ton += (await wallet.balance) # just ton balance
             balance_USDT += (await wallet.balance_USDT) # balance for all wallets 
         user._logger.debug(f"balance calculated: {balance_ton}")
         await query.answer()
+        if balance_USDT > 0: 
+            from tonpay.utils.ccxt import convert_ticker
+            balance_ton = balance_USDT/(await convert_ticker(1, "TON", "USDT"))
+        else: balance_ton = balance_USDT = 0 
         await FinanceMenu_msg(update, LANG, balance_ton, balance_USDT)
         self.prev_user_callback[user_id] = self.home
         return MAIN_ROUTE
     
     
     @logger.catch
-    async def wallets(self, update: Update, context):
+    async def wallets(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
+                      edit_current: bool = True):
         user_id = str(update.effective_user.id)
         user: User|None = await User.get(user_id)
-        _wallets = await user.dump_wallets(asjson=True, include_fields=["address"])
+        _wallets = await user.dump_wallets(asjson=True, include_fields=["address", "type"])
         user._logger.debug("fetched user wallets: {wallets}", wallets=list(_wallets.keys()) )
-        await wallets_msg(update, _wallets, LANG)
+        await wallets_msg(update, _wallets, LANG, edit_current=edit_current)
         self.prev_user_callback[user_id] = self.finance
         return MAIN_ROUTE
     
@@ -70,7 +79,7 @@ class ButtonsHandler:
         query = update.callback_query
         wallet_name = query.data
         user_id = str(update.effective_user.id)
-        user = await self.get_user_db(user_id, update, context)
+        user = await self._get_db_user(user_id, update, context)
         if not user: return 
         _logger = user._logger
         _wallet: Wallet = (await user.dump_wallets())[wallet_name]
@@ -111,13 +120,10 @@ class ButtonsHandler:
     
     async def new_wallet(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = str(update.effective_user.id)
-        user = await self.get_user_db(user_id, update, context)
-        if not user: return
-        path = "".join(['b' for i in range(16)])
-        await user.add_wallet(name = "test", path=path,
-                              Type="TON", unit = "TON")
-        # await self.wallets(update, context)
-        return MAIN_ROUTE
+        user = await self._get_db_user(user_id, update, context)
+        if not user: return MAIN_ROUTE
+        await NewWalletType_msg(update)
+        return NEW_WALLET_ROUTE
     
     
     async def seeds(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -158,7 +164,7 @@ class ButtonsHandler:
             self.prev_user_callback = {}
             
             
-    async def get_user_db(self, user_id: str, update: Update, 
+    async def _get_db_user(self, user_id: str, update: Update, 
                  context: ContextTypes.DEFAULT_TYPE) -> User:
         user = self.users.get(str(user_id), None)
         if not user: 
@@ -170,10 +176,69 @@ class ButtonsHandler:
     @property
     def users(self):
         return self.__users
+    
+    
+class NewWalletHandler(ButtonsHandler):
+    user_input = {} # user_input[user_id] == {"name": ...., "type":....}
+    user_lastcallback = {} # user_lastcallback[user_id] == self.name
+
+    async def Type(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = str(update.effective_user.id)
+        query = update.callback_query
+        self.user_input[user_id] = {"name": None, "type": None}
+        
+        _type = query.data.upper()
+        assert _type in blockchains, f"input blockchain {_type} not found"
+        self.user_input[user_id]['type'] = _type
+        await NewWalletName_msg(update)
+        self.user_lastcallback[user_id] = "type"
+        return NEW_WALLET_ROUTE
+    
+    
+    async def name(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = str(update.effective_user.id)
+        name = update.message.text
+        self.user_input[user_id]["name"] = name
+        _type = self.user_input[user_id]["type"]
+        user: User|None = await User.get(user_id)
+        assert name not in (await user.dump_wallets()).keys(), f"wallet {name=} is used before"
+        wallet = await self._create_wallet(_type)
+        path = await wallet.get_path()
+        addr = await wallet.get_address()
+        await user.add_wallet(name=name, address=addr, path=path, 
+                              Type=_type, unit=_type)
+        await self.wallets(update, context, edit_current=False) # back to wallets menu
+        self.user_lastcallback[user_id] = "name"
+        return MAIN_ROUTE
+    
+    
+    async def _create_wallet(self, Type: str = "TON") -> BaseWallet:
+        from importlib import import_module
+        Type = Type.upper()
+        assert Type in blockchains, f"input {Type} blockchain is not acceptable"
+        Wallet: BaseWallet = import_module(f"tonpay.wallets.blockchain.{Type}").Wallet
+        wallet = await Wallet.new_wallet()
+        return wallet    
+    
+    
+    async def skip(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = str(update.effective_user.id)
+        query = update.callback_query
+        if self.user_lastcallback[user_id] == "type":
+            await NewWalletName_msg(update, edit_current=False)
+            return NEW_WALLET_ROUTE
+        await self.wallets(update, context)
+        return MAIN_ROUTE
+    
+    
+    async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await self.wallets(update, context)
+        return MAIN_ROUTE
 
 
 def main() -> None:
     button_handler = ButtonsHandler()
+    wallet = NewWalletHandler()
     
     application = Application.builder().token(TOKEN) \
                   .concurrent_updates(True).build()
@@ -187,6 +252,13 @@ def main() -> None:
                 CallbackQueryHandler(button_handler.home, pattern=f"^{HOME}$"),
                 CallbackQueryHandler(button_handler.back, pattern=f"^{BACK}$"),
                 CallbackQueryHandler(button_handler.new_wallet, pattern=f"^{NEW_WALLET}$")
+            ],
+            NEW_WALLET_ROUTE: [
+                CommandHandler("skip", wallet.skip),
+                CommandHandler("cancel", wallet.cancel),
+                CallbackQueryHandler( wallet.Type,
+                    pattern=Utils.selectables2regex(blockchains)),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, wallet.name),
             ]
         },
         fallbacks=[CommandHandler("start", button_handler.start)],

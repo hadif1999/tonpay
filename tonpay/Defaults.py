@@ -18,6 +18,7 @@ class Blockchain_enum(str, Enum):
         ETH = "ETH"
         BNB = "BNB"
 
+_blockchains = config["general"].get("blockchains", ["ETH", "BNB", "TON"])
 @dataclass
 class formats:
     datetime:str = _datetime_fmt
