@@ -7,10 +7,10 @@ from loguru import logger
 from sqlalchemy_utils import database_exists, create_database, drop_database
 
 ENGINE = create_engine(os.getenv("DB_URI", 
-                                 "postgresql+psycopg2://postgres:secret@172.19.0.2:5432/tonpay.db"))
+                                 "postgresql+psycopg2://postgres:secret@172.19.0.3:5433/tonpay.db"))
 
 ASYNC_ENGINE = create_async_engine(os.getenv("DB_URI", 
-                                  "postgresql+asyncpg://postgres:secret@172.19.0.2:5432/tonpay.db"))
+                                  "postgresql+asyncpg://postgres:secret@172.19.0.3:5433/tonpay.db"))
 
 
 def build_DB(overwrite_db: bool = False):

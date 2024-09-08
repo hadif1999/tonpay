@@ -3,8 +3,7 @@ from ton.sync import TonlibClient
 import ton
 from typing import Any, Literal, Annotated
 from loguru import logger
-from tonpay.wallets.blockchain.Base import InSufficientBalanceError
-from tonpay.wallets.blockchain.Base import Wallet as BaseWallet
+from blockchains.Base import Wallet as BaseWallet, InSufficientBalanceError
 
 async def get_client():
     client = TonlibClient()

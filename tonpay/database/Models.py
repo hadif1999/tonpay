@@ -56,11 +56,11 @@ class User(SQLModel, table=True):
     
     id: int|None = Field(primary_key=True, default=None)
     user_id: str = Field(index=True, unique=True, 
-                         min_length=5, max_length=100)
+                         min_length=5, max_length=100, nullable=False)
     email: EmailStr|None = Field(min_length=5, max_length=200,
                                  unique=True, default=None)
     max_allowed_wallets: PositiveInt = Field(default=Defaults.users.wallets.count.demo,
-                                             le=10, gt=0)
+                                             le=10, gt=0, nullable=False)
     password: str|None = Field(default=None, min_length=8, max_length=50)
     payment_gateway_active: bool = Field(default=False)
     wallets: list["Wallet"] = Relationship(back_populates="user")
@@ -304,14 +304,14 @@ class WalletDetail_ABC(ABC): # abstract class for WalletDetail classes
 # wallet on blockchain
 class TON_Wallet(SQLModel, WalletDetail_ABC, table=True):
     id: Optional[int] = Field(primary_key=True, default=None)
-    address: str = Field(unique=True, min_length=10, max_length=200)
+    address: str = Field(unique=True, min_length=10, max_length=200, nullable=False)
     path: bytes = Field(unique=True, # SHA256(user_id:date_created("Y-M-D_H:MM:S"):salt)
-                       min_length=10, max_length=1000)
+                       min_length=10, max_length=1000, nullable=False)
     type:str = Field("TON", const= True)
     enc_date: dt.datetime = Field(default=dt.datetime.now()) # encryption time 
-    balance: PositiveFloat = Field(default=0)
+    balance: PositiveFloat = Field(default=0, nullable=False)
     unit: str = Field(default="TON", const=True) # balance unit in TON
-    wallet_id: int|None = Field(default=None, foreign_key="wallet.id") 
+    wallet_id: int|None = Field(default=None, foreign_key="wallet.id", nullable=False) 
             
     
     @property
@@ -365,15 +365,15 @@ class Units_enum(str, Enum):
 # wallet inside the platform
 class Internal_Wallet(SQLModel, WalletDetail_ABC, table=True):
     id: Optional[int] = Field(primary_key=True, default=None)
-    balance: PositiveFloat = Field(default=0) # holds theter or TON
+    balance: PositiveFloat = Field(default=0, nullable=False) # holds theter or TON
     # this address can't be used in any transaction
     address: str = Field(unique=True,  # SHA256(user_id:date_created("Y-M-D_H:MM:S"):randint)
-                         min_length=10, max_length=1000)
+                         min_length=10, max_length=1000, nullable=False)
     enc_date: dt.datetime = Field(default=dt.datetime.now())# encryption time 
     type: Optional[str] = Field(None, const=True)
     unit: Optional[Units_enum] = Field(default=Units_enum.TON,
-                                       min_length=3, max_length=4)
-    wallet_id: int|None = Field(default=None, foreign_key="wallet.id")
+                                       min_length=3, max_length=4, nullable=False)
+    wallet_id: int|None = Field(default=None, foreign_key="wallet.id", nullable=False)
         
     
     @property
