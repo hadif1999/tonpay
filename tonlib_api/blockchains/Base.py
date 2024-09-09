@@ -1,16 +1,15 @@
-from typing import Any, Literal, Annotated
-from loguru import logger
+from typing import Any, Literal, Optional
 from abc import abstractmethod, ABC
 
 
 class Wallet(ABC):
     
     @abstractmethod
-    async def new_wallet(password:str|None = None,**kwargs) -> 'Wallet':
+    async def new_wallet(password: Optional[str] = None,**kwargs) -> 'Wallet':
         pass        
         
     @abstractmethod
-    async def find_wallet(path: bytes, password: str|None = None) -> 'Wallet':
+    async def find_wallet(path: bytes, password: Optional[str] = None) -> 'Wallet':
         pass
     
     @abstractmethod
@@ -22,7 +21,7 @@ class Wallet(ABC):
         pass
     
     @abstractmethod
-    async def get_balance(self) -> Annotated[float, "unit in TON"]:
+    async def get_balance(self) -> float:
         pass
     
     @abstractmethod
@@ -35,13 +34,13 @@ class Wallet(ABC):
     
             
     @abstractmethod
-    async def transfer(self, dest_addr:str, amount: float, comment: str| None = None, 
-                       unit: Literal["TON", "nTON"] = "TON", **kwargs):
+    async def transfer(self, dest_addr:str, amount: float, comment: Optional[str] = None, 
+                       unit: str = "TON", **kwargs):
         pass
     
 
 class InSufficientBalanceError(Exception):
-    def __init__(self, msg: str, code: int|None = None) -> None:
+    def __init__(self, msg: str, code: Optional[str] = None) -> None:
         super().__init__(msg)
         self.error_code = code
         

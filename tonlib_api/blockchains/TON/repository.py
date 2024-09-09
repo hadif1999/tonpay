@@ -1,7 +1,6 @@
 from ton.account import Account
 from ton.sync import TonlibClient
-import ton
-from typing import Any, Literal, Annotated
+from typing import Any, Literal, Optional
 from loguru import logger
 from blockchains.Base import Wallet as BaseWallet, InSufficientBalanceError
 
@@ -20,46 +19,39 @@ class Wallet(BaseWallet):
         self.__wallet: Account = wallet
         
         
-    @logger.catch
     @staticmethod
-    async def new_wallet(password:str|None = None,**kwargs) -> 'Wallet':
+    async def new_wallet(password: Optional[str] = None, **kwargs) -> 'Wallet':
         client = await get_client()
         new_wallet = await client.create_wallet(local_password=password, **kwargs)
         return Wallet(new_wallet)
         
         
-    @logger.catch
     @staticmethod
-    async def find_wallet(path: bytes, password: str|None = None) -> 'Wallet':
+    async def find_wallet(path: bytes, password: Optional[str] = None) -> 'Wallet':
         client = await get_client()
         new_wallet = await client.find_wallet(path, password) 
         return Wallet(new_wallet)
     
     
-    @logger.catch
     async def find_account(address: str, **kwargs) -> 'Wallet':
         client = await get_client()
         account = await client.find_account(address, **kwargs)
         return Wallet(account)    
     
     
-    @logger.catch
     async def get_address(self):
         return self.__wallet.address
     
     
-    @logger.catch
-    async def get_balance(self) -> Annotated[float, "unit in TON"]:
+    async def get_balance(self) -> float:
         balance_ton = self.to_nano(await self.__wallet.get_balance())
         return balance_ton
     
     
-    @logger.catch
     async def get_seeds(self):
         return await self.__wallet.export()
     
     
-    @logger.catch
     async def get_path(self):
         return self.__wallet.path
     
@@ -71,8 +63,7 @@ class Wallet(BaseWallet):
         return Wallet(_wallet)
         
         
-    @logger.catch
-    async def transfer(self, dest_addr:str, amount: float, comment: str| None = None, 
+    async def transfer(self, dest_addr:str, amount: float, comment: Optional[str] = None, 
                        unit: Literal["TON", "nTON"] = "TON", **kwargs):
         amount = self.from_nano(amount) if unit == "nTON" else amount # amount in ton 
         if (await self.balance) < amount: raise InSufficientBalanceError

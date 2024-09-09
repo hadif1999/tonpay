@@ -17,6 +17,7 @@ from sqlalchemy.orm import selectinload
 from abc import ABC, abstractmethod
 from tonpay.utils.ccxt import convert_ticker
 from enum import Enum
+from tonpay.wallets.blockchain.Base import Wallet as BaseWallet
 
 
 PLATFORM_NAME = Defaults._platform_name
@@ -170,7 +171,7 @@ class User(SQLModel, table=True):
         Type = Type.upper()
         blockchain = importlib.import_module(f"tonpay.wallets.blockchain.{Type}")
         Wallet_cls = getattr(blockchain, "Wallet") # get wallet from blockchain
-        wallet = await Wallet_cls.import_wallet_bySeeds(seeds, **kwargs)
+        wallet: BaseWallet = await Wallet_cls.import_wallet_bySeeds(seeds, **kwargs)
         balance = await wallet.get_balance()
         addr = await wallet.get_address()
         path_raw = await wallet.get_path()
@@ -317,10 +318,9 @@ class TON_Wallet(SQLModel, WalletDetail_ABC, table=True):
     @property
     async def refresh(self):
         # refresh balance and unit if needed
-        path = await self.decrypt_path
         from tonpay.wallets.blockchain.TON import Wallet
         # passwd = self.user.password ??????????? # toDo: can we add password to wallet?
-        wallet = await Wallet.find_wallet(path)
+        wallet: BaseWallet = await Wallet.find_account(self.address)
         self.balance = await wallet.get_balance() # balance in TON
         return True
     
