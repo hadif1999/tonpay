@@ -29,7 +29,13 @@ COPY . .
 RUN apt install apt-utils
 RUN apt update && apt-get -y install python3 python3-dev python3-pip 
 RUN pip3 install -r requirements.txt
+RUN bash scripts/setup.sh
+RUN bash scripts/update_init_block.sh
 
+RUN git clone https://github.com/wolfssl/wolfssl.git && cd wolfssl/ && ./autogen.sh && ./configure --enable-sha512
+RUN make && make install
 
+RUN apt-get install -y git autoconf libtool && git clone https://github.com/wolfssl/wolfssl.git
+RUN cd wolfssl/ && ./autogen.sh && ./configure --enable-sha512 && make && make install && ldconfig
 
 ENTRYPOINT [ "/bin/bash"]

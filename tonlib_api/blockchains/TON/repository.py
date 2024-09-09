@@ -1,7 +1,6 @@
 from ton.account import Account
 from ton.sync import TonlibClient
 from typing import Any, Literal, Optional
-from loguru import logger
 from blockchains.Base import Wallet as BaseWallet, InSufficientBalanceError
 
 async def get_client():
