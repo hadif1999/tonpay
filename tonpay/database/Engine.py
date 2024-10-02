@@ -6,11 +6,18 @@ from . import Models
 from loguru import logger
 from sqlalchemy_utils import database_exists, create_database, drop_database
 
+
+DB_HOST = "172.19.0.2"
+DB_SECRET = "secret"
+DB_USER = "postgres"
+DB_NAME = "tonpay.db"
+DB_URI_BASE = f"{DB_USER}:{DB_SECRET}@{DB_HOST}/{DB_NAME}"
+
 ENGINE = create_engine(os.getenv("DB_URI", 
-                                 "postgresql+psycopg2://postgres:secret@172.17.0.2/tonpay.db"))
+                                 f"postgresql+psycopg2://{DB_URI_BASE}"))
 
 ASYNC_ENGINE = create_async_engine(os.getenv("DB_URI", 
-                                  "postgresql+asyncpg://postgres:secret@172.17.0.2/tonpay.db"))
+                                  f"postgresql+asyncpg://{DB_URI_BASE}"))
 
 
 def build_DB(overwrite_db: bool = False):

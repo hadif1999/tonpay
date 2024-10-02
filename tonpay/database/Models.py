@@ -18,6 +18,7 @@ from abc import ABC, abstractmethod
 from tonpay.utils.ccxt import convert_ticker
 from enum import Enum
 from tonpay.wallets.blockchain.Base import Wallet as BaseWallet
+from tonpay.wallets.blockchain import TON
 
 
 PLATFORM_NAME = Defaults._platform_name
@@ -356,6 +357,14 @@ class TON_Wallet(SQLModel, WalletDetail_ABC, table=True):
                                 address=self.address)
         path_org = Symmetric(KEY).decrypt(self.path)
         return path_org
+    
+    
+    @property
+    async def seeds(self):
+        path = await self.decrypt_path
+        logger.debug(f"{path = }")
+        wallet = await TON.Wallet.find_wallet(path)
+        return await wallet.get_seeds()
 
 
 class Units_enum(str, Enum):

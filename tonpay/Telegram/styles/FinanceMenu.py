@@ -17,17 +17,24 @@ def render_keyboard(refresh_txt:str, wallets_txt:str, transactions_txt:str,
     return keyboard
     
 
+def get_balance_str(title:str = "total balance"):
+    _balance_str_base = f"<b>{title}</b>:" + "\n{balance} <b>TON</b> ~ {balance_dollar} <b>USDT</b>"
+    return _balance_str_base
+
+
 class Eng:
-    header = """📈 Finance Dashboard
-    <b>total balance</b>: 
-{balance} <b>TON</b> ~ {balance_dollar} <b>USDT</b>"""
+    _show_balance = True
+    _balance_str = get_balance_str("total balance") if _show_balance else ""
+    header = f"""📈 Finance Dashboard
+    {_balance_str}"""
     keyboard = render_keyboard("Refresh", "Wallets", "Transactions", 
                                "Equity chart", "Payment Gateway", bhk("Back", "Home"))
     
     
 class Fa:
-    header = """📈 پنل مالی
-    دارایی کل: 
-{balance} TON ~ {balance_dollar} USDT"""
+    _show_balance = True
+    _balance_str = get_balance_str("دارایی کل") if _show_balance else ""
+    header = f"""📈 پنل مالی
+    {_balance_str}"""
     keyboard = render_keyboard("به روزرسانی", "کیف پول ها", "مبادلات", "نمودار دارایی ها",
                                "درگاه پرداخت", "قبل", "خانه", bhk("قبل", "خانه"))
