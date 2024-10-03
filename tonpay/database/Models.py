@@ -74,12 +74,12 @@ class User(SQLModel, table=True):
     
     
     @staticmethod
-    async def get(user_id: str|int) -> "User":
+    async def get(user_id: str|int, load_wallets: bool = True) -> "User":
         user_id = str(user_id)
+        query = select(__class__).where(__class__.user_id == user_id)
+        if load_wallets: query = query.options(selectinload(__class__.wallets))
         async with AsyncSession(ASYNC_ENGINE) as session:
-            res = await session.exec( select(__class__)
-                                     .where(__class__.user_id == user_id)
-                                     .options(selectinload(__class__.wallets)))
+            res = await session.exec( query )
             user = res.first()
         return user
     
@@ -171,7 +171,7 @@ class User(SQLModel, table=True):
         import importlib
         Type = Type.upper()
         blockchain = importlib.import_module(f"tonpay.wallets.blockchain.{Type}")
-        Wallet_cls = getattr(blockchain, "Wallet") # get wallet from blockchain
+        Wallet_cls: BaseWallet = blockchain.Wallet # get wallet from blockchain
         wallet: BaseWallet = await Wallet_cls.import_wallet_bySeeds(seeds, **kwargs)
         balance = await wallet.get_balance()
         addr = await wallet.get_address()
@@ -230,7 +230,6 @@ class Wallet(SQLModel, table=True):
             wallet_detail = await session.get(detail_table, wallet_detail_id)
         return wallet_detail
         
-        
     
     @property
     async def balance(self) -> float:
@@ -261,6 +260,17 @@ class Wallet(SQLModel, table=True):
     async def address(self):
         wallet_detail = await self.wallet_detail
         return await wallet_detail.get_address()
+    
+    
+    @property
+    async def delete(self):
+        async with AsyncSession(ASYNC_ENGINE) as session:
+            detail = await self.wallet_detail
+            # deleting wallet and it's detail
+            await session.delete(self)
+            await session.delete(detail)
+            await session.commit()
+        return self
     
     
 class WalletDetail_ABC(ABC): # abstract class for WalletDetail classes
