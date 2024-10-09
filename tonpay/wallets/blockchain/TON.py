@@ -6,6 +6,7 @@ from loguru import logger
 from tonpay.wallets.blockchain.Base import InSufficientBalanceError
 from tonpay.wallets.blockchain.Base import Wallet as BaseWallet
 
+
 async def get_client():
     client = TonlibClient()
     TonlibClient.enable_unaudited_binaries()
@@ -14,32 +15,43 @@ async def get_client():
 
 
 class Wallet(BaseWallet):
+    __client = None
+    
+    
     def __init__(self, wallet):        
         # building client
-        client = TonlibClient()
-        self.to_nano, self.from_nano = client.to_nano, client.from_nano
+        _client = TonlibClient() # it will be removed
+        self.to_nano, self.from_nano = _client.to_nano, _client.from_nano
         self.__wallet: Account = wallet
+        
+    
+    @classmethod
+    async def _get_client(cls):
+        cls.__client = cls.__client or await get_client()
+        return cls.__client
         
         
     @logger.catch
     @staticmethod
     async def new_wallet(password:str|None = None,**kwargs) -> 'Wallet':
-        client = await get_client()
-        new_wallet = await client.create_wallet(local_password=password, **kwargs)
+        client = await __class__._get_client()
+        src = kwargs.get("source", "v4r2")
+        if "source" in kwargs: del kwargs["source"]
+        new_wallet = await client.create_wallet(local_password=password, source=src, **kwargs)
         return Wallet(new_wallet)
         
         
     @logger.catch
     @staticmethod
     async def find_wallet(path: bytes, password: str|None = None) -> 'Wallet':
-        client = await get_client()
+        client = await __class__._get_client()
         new_wallet = await client.find_wallet(path, password) 
         return Wallet(new_wallet)
     
     
     @logger.catch
     async def find_account(address: str, **kwargs) -> 'Wallet':
-        client = await get_client()
+        client = await __class__._get_client()
         account = await client.find_account(address, **kwargs)
         return Wallet(account)    
     
@@ -50,8 +62,9 @@ class Wallet(BaseWallet):
     
     
     @logger.catch
-    async def get_balance(self) -> Annotated[float, "unit in TON"]:
-        balance_ton = self.to_nano(await self.__wallet.get_balance())
+    async def get_balance(self, to_nano: bool = False) -> Annotated[float, "unit in TON"]:
+        _balance = await self.__wallet.get_balance()
+        balance_ton = _balance if to_nano else self.from_nano(_balance) 
         return balance_ton
     
     
@@ -67,8 +80,10 @@ class Wallet(BaseWallet):
     
     @staticmethod
     async def import_wallet_bySeeds(seeds: str, **kwargs):
-        client = await get_client()
-        _wallet = await client.import_wallet(seeds, **kwargs)
+        client = await __class__._get_client()
+        src = kwargs.get("source", "v4r2")
+        if "source" in kwargs: del kwargs["source"]
+        _wallet = await client.import_wallet(seeds, source=src, **kwargs)
         return Wallet(_wallet)
         
         

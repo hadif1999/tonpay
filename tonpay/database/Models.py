@@ -90,12 +90,16 @@ class User(SQLModel, table=True):
                            include_fields: list[str]|None = None,
                            exclude_fields: list[str]|None = None, nameAsKey: bool = True)-> dict[str, Any]:
         _logger = self._logger
-        if self.wallets == []:
+        with Session(ENGINE) as session: # load self.wallets into memory
+            _self = session.merge(self)
+            session.refresh(_self)
+            wallets = _self.wallets
+        if wallets == []:
             _logger.debug(f"no wallets defined yet")
             {}
         wallets_dump = {}
         wallets_dump_ls = []
-        for wallet in self.wallets:
+        for wallet in wallets:
             name = wallet.name
             blockchain = wallet.type
             wallet_table = get_table_by_blockchain(blockchain)
@@ -173,7 +177,7 @@ class User(SQLModel, table=True):
         blockchain = importlib.import_module(f"tonpay.wallets.blockchain.{Type}")
         Wallet_cls: BaseWallet = blockchain.Wallet # get wallet from blockchain
         wallet: BaseWallet = await Wallet_cls.import_wallet_bySeeds(seeds, **kwargs)
-        balance = await wallet.get_balance()
+        balance = 0
         addr = await wallet.get_address()
         path_raw = await wallet.get_path()
         dt_now = dt.datetime.now()
@@ -311,7 +315,12 @@ class WalletDetail_ABC(ABC): # abstract class for WalletDetail classes
         async with AsyncSession(ASYNC_ENGINE) as session:
             user = await session.get(User, await self.user_id)
             return user
-        
+
+
+class Units_enum(str, Enum):
+    USDT = "USDT"
+    TON = "TON"
+    BTC = "BTC"
         
 # wallet on blockchain
 class TON_Wallet(SQLModel, WalletDetail_ABC, table=True):
@@ -331,7 +340,7 @@ class TON_Wallet(SQLModel, WalletDetail_ABC, table=True):
         # refresh balance and unit if needed
         from tonpay.wallets.blockchain.TON import Wallet
         # passwd = self.user.password ??????????? # toDo: can we add password to wallet?
-        wallet: BaseWallet = await Wallet.find_account(self.address)
+        wallet: Wallet = await Wallet.find_account(self.address)
         self.balance = await wallet.get_balance() # balance in TON
         return True
     
@@ -377,10 +386,7 @@ class TON_Wallet(SQLModel, WalletDetail_ABC, table=True):
         return await wallet.get_seeds()
 
 
-class Units_enum(str, Enum):
-    USDT = "USDT"
-    TON = "TON"
-    BTC = "BTC"
+
 # wallet inside the platform
 class Internal_Wallet(SQLModel, WalletDetail_ABC, table=True):
     id: Optional[int] = Field(primary_key=True, default=None)
@@ -390,7 +396,7 @@ class Internal_Wallet(SQLModel, WalletDetail_ABC, table=True):
                          min_length=10, max_length=1000, nullable=False)
     enc_date: dt.datetime = Field(default=dt.datetime.now())# encryption time 
     type: Optional[str] = Field(None, const=True)
-    unit: Optional[Units_enum] = Field(default=Units_enum.TON,
+    unit: Optional[Units_enum] = Field(default=Units_enum.USDT,
                                        min_length=3, max_length=4, nullable=False)
     wallet_id: int|None = Field(default=None, foreign_key="wallet.id", nullable=False)
         
@@ -404,8 +410,10 @@ class Internal_Wallet(SQLModel, WalletDetail_ABC, table=True):
         await self.refresh
         balance = self.balance
         if balance > 0:
-            balance_usdt = await convert_ticker(self.balance, self.unit.value,
-                                                "USDT")
+            if self.unit.value != Units_enum.USDT.value: 
+                balance_usdt = await convert_ticker(self.balance, self.unit.value,
+                                                    "USDT")
+            else: balance_usdt = self.balance
         else: balance_usdt = 0
         return balance_usdt
     

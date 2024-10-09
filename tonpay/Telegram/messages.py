@@ -182,8 +182,7 @@ class ImportWalletMsg:
     @staticmethod
     async def seeds(update: Update, edit_current: bool = True):
         header = "enter seeds to import wallet (separated by space) \n\n"
-        bhk = BackHomeKeyboard.Eng
-        keyboard = InlineKeyboardMarkup([bhk])
+        keyboard = InlineKeyboardMarkup([BackHomeKeyboard.Eng])
         if edit_current:
             # editing current msg
             query = update.callback_query

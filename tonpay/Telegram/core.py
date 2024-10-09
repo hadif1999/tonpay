@@ -54,13 +54,13 @@ class ButtonsHandler:
         balance_USDT = 0
         for wallet in user.wallets:
             balance_USDT += (await wallet.balance_USDT) # balance for all wallets 
-        user._logger.debug(f"balance calculated: {balance_ton}")
+        user._logger.debug(f"balance calculated: {balance_USDT}")
         await query.answer()
         if balance_USDT > 0: 
             from tonpay.utils.ccxt import convert_ticker
             balance_ton = balance_USDT/(await convert_ticker(1, "TON", "USDT"))
         else: balance_ton = balance_USDT = 0 
-        await FinanceMenu_msg(update, LANG, balance_ton, balance_USDT)
+        await FinanceMenu_msg(update, LANG, round(balance_ton, 2), round(balance_USDT, 2))
         self._prev_user_callback[user_id] = self.home
         return MAIN_ROUTE
     
@@ -195,20 +195,28 @@ class ImportWallet(ButtonsHandler):
         _type = query.data.upper()
         assert _type in blockchains, f"input blockchain {_type} not found"
         self._user_input[user_id]['type'] = _type
-        await NewWalletMsg.name(update)
+        await ImportWalletMsg.seeds(update)
         self._user_lastcallback[user_id] = "Type"
         return IMPORT_WALLET_ROUTE
     
     
-    async def name(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def handle_txt_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = str(update.effective_user.id)
-        query = update.callback_query
-        name = query.data 
-        self._user_input[user_id]["name"] = name 
-        await ImportWalletMsg.seeds(update, False)
-        return IMPORT_WALLET_ROUTE
-    
-    
+        input_txt = update.message.text        
+        input_split = input_txt.split()
+        prev_callback = self._user_lastcallback[user_id]
+        _input = self._user_input[user_id]
+        if prev_callback == "Type" and len(input_split) > 1: # then it's seeds
+            seeds = input_txt.strip().lower()
+            return await self._handle_seeds(update, context, seeds)
+        elif _input["seeds"] and len(input_split) == 1: # then it's name
+            name = input_split[0]
+            return await self._handle_name(update, context, name)
+        else: 
+            await ImportWalletMsg.seeds(update, False)
+            logger.error("undefined condition")
+             
+             
     async def skip(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = str(update.effective_user.id)
         self._user_input[user_id]["name"] = None
@@ -221,9 +229,10 @@ class ImportWallet(ButtonsHandler):
         return MAIN_ROUTE
 
     
-    async def seeds(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def _handle_seeds(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
+                            seeds: str):
         user_id = str(update.effective_user.id)
-        seeds = update.effective_message.text
+        assert len(seeds.split()) > 10, "not enough number of seeds"
         self._user_input[user_id]["seeds"] = seeds
         user: User = await User.get(user_id, load_wallets=False)
         inputs = self._user_input[user_id]
@@ -231,6 +240,14 @@ class ImportWallet(ButtonsHandler):
         await user.import_wallet(_type, _seeds, _name)
         await self.wallets(update, context, edit_current=False)
         return MAIN_ROUTE
+    
+    
+    async def _handle_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
+                           name: str):
+        user_id = str(update.effective_user.id)
+        self._user_input[user_id]["name"] = name 
+        await ImportWalletMsg.seeds(update, False)
+        return IMPORT_WALLET_ROUTE
     
     
 class WalletDetail(ButtonsHandler):
@@ -366,10 +383,9 @@ def main() -> None:
             IMPORT_WALLET_ROUTE: [
                 CallbackQueryHandler(import_wallet.Type, 
                                      pattern=Utils.selectables2regex(blockchains)),
-                CallbackQueryHandler(import_wallet.name, pattern=f"^{WALLET_NAME}$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, import_wallet.handle_txt_input),
                 CommandHandler("skip", import_wallet.skip),
                 CommandHandler("cancel", import_wallet.cancel),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, import_wallet.seeds),
                 CallbackQueryHandler(wallet.back, pattern=f"^{BACK}$"),
                 CallbackQueryHandler(wallet.home, pattern=f"^{HOME}$"),
             ]
