@@ -7,7 +7,7 @@ from loguru import logger
 from sqlalchemy_utils import database_exists, create_database, drop_database
 
 
-DB_HOST = "172.19.0.2"
+DB_HOST = "172.19.0.3"
 DB_SECRET = "secret"
 DB_USER = "postgres"
 DB_NAME = "tonpay.db"

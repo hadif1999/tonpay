@@ -125,9 +125,9 @@ class User(SQLModel, table=True):
                          balance: float = 0, unit:str|None = None,
                          throw_exp: bool = False):
         _logger = self._logger
-        async with AsyncSession(ASYNC_ENGINE) as session: # load self.wallets into memory
-            _self = await session.merge(self)
-            await session.refresh(_self)
+        with Session(ENGINE) as session: # load self.wallets into memory
+            _self = session.merge(self)
+            session.refresh(_self)
             wallets = _self.wallets
         allowed = len(wallets) <= self.max_allowed_wallets
         _logger.debug(f"num max_allowed user's wallets:{self.max_allowed_wallets}")
@@ -396,7 +396,7 @@ class Internal_Wallet(SQLModel, WalletDetail_ABC, table=True):
                          min_length=10, max_length=1000, nullable=False)
     enc_date: dt.datetime = Field(default=dt.datetime.now())# encryption time 
     type: Optional[str] = Field(None, const=True)
-    unit: Optional[Units_enum] = Field(default=Units_enum.USDT,
+    unit: Optional[Units_enum] = Field(default=Units_enum.TON,
                                        min_length=3, max_length=4, nullable=False)
     wallet_id: int|None = Field(default=None, foreign_key="wallet.id", nullable=False)
         

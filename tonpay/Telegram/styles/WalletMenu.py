@@ -21,14 +21,14 @@ class Eng:
     keyboard = render_keyboard("Refresh", "QR Code", "Transfer", 
                                "Seeds", "Delete", bhk("Back", "Home"))
     def __init__(self, wallet_name:str, balance: float, addr: str,
-                       explorer_url:str = "") -> None:
+                       explorer_url:str = "", Type: str = "TON") -> None:
         explorer_url = explorer_url.format(addr = addr, address = addr)
         href_explorer = f'<a href="{explorer_url}">(open in explorer)</a>' if explorer_url != "" else ''
         self.header = f"""TonPay Wallet
 <b>name:
 </b> {wallet_name}
         
-<b>balance:</b> {balance}
+<b>balance:</b> {balance} {Type}
         
 <b>address:</b> 
 {addr}
@@ -46,14 +46,14 @@ class Fa:
     keyboard = render_keyboard("به روزرسانی", "QR کد", "انتقال", 
                                "کلمات عبور", "حذف", bhk("قبلی", "خانه"))
     def __init__(self, wallet_name:str, balance: float, addr: str,
-                 explorer_url:str = "") -> None:
+                 explorer_url:str = "", Type: str = "TON") -> None:
         explorer_url = explorer_url.format(addr = addr, address = addr)
         href_explorer = f'<a href="{explorer_url}">(open in explorer)</a>' if explorer_url != "" else ''
         self.header = f"""TonPay کیف پول
 <b>نام:</b>
 {wallet_name}
         
-<b>دارایی:</b> {balance}
+<b>دارایی:</b> {balance} {Type}
         
 <b>آدرس:</b> 
 {addr}

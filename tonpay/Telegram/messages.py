@@ -6,6 +6,7 @@ from ton.account import Account
 from typing import Annotated
 from telegram.constants import ParseMode
 from tonpay.Telegram.styles.Utils import back_home_keyboard as bhk, BackHomeKeyboard
+from tonpay import Defaults
 from loguru import logger
 
 async def MainMenu_msg(update: Update, lang:str = "eng", edit_current: bool = False):
@@ -75,13 +76,13 @@ async def wallets_msg(update: Update, wallets: dict[NAME, ADDRESS], lang:str = "
 
 
 
-async def wallet_msg(update: Update, wallet_name: str, Type: str,
+async def wallet_msg(update: Update, wallet_name: str, Type: str|None,
                      wallet_balance:float, addr:str, lang:str = "eng",
                      edit_current: bool = True):
     lang = lang.title()
-    Type = Type.upper() if Type else "Internal" 
+    _Type = Type.upper() if Type else "Internal" 
     from tonpay.Defaults import formats
-    explorer_url = getattr(formats.explorer_url, Type, "")
+    explorer_url = getattr(formats.explorer_url, _Type, "")
     query = update.callback_query
     try: 
         lang_cls = getattr(WalletMenu, lang)
@@ -90,7 +91,7 @@ async def wallet_msg(update: Update, wallet_name: str, Type: str,
         raise AttributeError(f"{lang} lang not found for wallet menu")
     lang_obj = lang_cls(wallet_name = wallet_name, 
                         balance = wallet_balance, addr = addr, 
-                        explorer_url = explorer_url)
+                        explorer_url = explorer_url, Type = Type or Defaults.Blockchain_enum.TON.value)
     header = lang_obj.header
     keyboard_markup = InlineKeyboardMarkup(keyboard)
     # parsmode MarkdownV2 or HTML
