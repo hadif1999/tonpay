@@ -6,7 +6,7 @@ from ..styles.Utils import back_home_keyboard as bhk
 def render_keyboard(refresh_txt:str, QrCode_txt:str, transfer_txt:str,
                     seeds_txt:str, delete_txt:str, *other_keyboards):
     refresh = IKB("🔄 " + refresh_txt, callback_data="refresh")
-    qrcode = IKB("🔲 " + QrCode_txt, callback_data="qrcode")
+    qrcode = IKB("🔲 " + QrCode_txt, callback_data="qr_code")
     transfer = IKB("💸 " + transfer_txt, callback_data="transfer")
     seeds = IKB("🔑 " + seeds_txt, callback_data="seeds")
     delete = IKB("❌ " + delete_txt, callback_data="delete")

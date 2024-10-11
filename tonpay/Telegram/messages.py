@@ -1,5 +1,7 @@
 from telegram import (InlineKeyboardMarkup, Update,
-                      ReplyKeyboardRemove, InlineKeyboardButton)
+                      ReplyKeyboardRemove, InlineKeyboardButton,
+                      InputMediaPhoto, InputMediaVideo, InputMediaDocument)
+from telegram.ext import ContextTypes
 from .styles import MainMenu, FinanceMenu, WalletsMenu, WalletMenu
 from .styles.new_wallet import Type
 from ton.account import Account
@@ -9,7 +11,9 @@ from tonpay.Telegram.styles.Utils import back_home_keyboard as bhk, BackHomeKeyb
 from tonpay import Defaults
 from loguru import logger
 
-async def MainMenu_msg(update: Update, lang:str = "eng", edit_current: bool = False):
+async def MainMenu_msg(update: Update, context:ContextTypes.DEFAULT_TYPE,
+                       lang:str = "eng", edit_current: bool = False,
+                       as_new_msg: bool = False):
     lang = lang.title()
     try: 
         lang_cls = getattr(MainMenu, lang)
@@ -19,6 +23,12 @@ async def MainMenu_msg(update: Update, lang:str = "eng", edit_current: bool = Fa
         raise AttributeError(f"{lang} lang not found for main menu")
     keyboard_markup = InlineKeyboardMarkup(keyboard)
     query = update.callback_query
+    if as_new_msg: 
+        chat_id = update.callback_query.message.chat.id
+        # msg_id = update.callback_query.message.message_id
+        # await context.bot.delete_message(chat_id, msg_id)
+        return await context.bot.send_message(chat_id, header, reply_markup=keyboard_markup,
+                                              parse_mode=ParseMode.HTML)
     if edit_current:
             await query.answer()
             return await query.edit_message_text(header, reply_markup=keyboard_markup,
@@ -54,7 +64,8 @@ async def FinanceMenu_msg(update: Update, lang:str = "eng", balance:str|float = 
 
 ADDRESS = Annotated[str, "wallet address"]
 NAME = Annotated[str, "wallet name"]
-async def wallets_msg(update: Update, wallets: dict[NAME, ADDRESS], lang:str = "eng", 
+async def wallets_msg(update: Update, context: ContextTypes.DEFAULT_TYPE,
+                      wallets: dict[NAME, ADDRESS], lang:str = "eng", 
                       edit_current: bool = True):
     lang = lang.title()
     query = update.callback_query
@@ -66,6 +77,7 @@ async def wallets_msg(update: Update, wallets: dict[NAME, ADDRESS], lang:str = "
     lang_obj = lang_cls(wallets)
     keyboard = lang_obj.keyboard
     keyboard_markup = InlineKeyboardMarkup(keyboard)
+    ####################
     if edit_current:
             await query.answer()
             return await query.edit_message_text(header, reply_markup=keyboard_markup,
@@ -76,9 +88,10 @@ async def wallets_msg(update: Update, wallets: dict[NAME, ADDRESS], lang:str = "
 
 
 
-async def wallet_msg(update: Update, wallet_name: str, Type: str|None,
+async def wallet_msg(update: Update, context: ContextTypes.DEFAULT_TYPE,
+                     wallet_name: str, Type: str|None,
                      wallet_balance:float, addr:str, lang:str = "eng",
-                     edit_current: bool = True):
+                     edit_current: bool = True, as_new_msg: bool = False):
     lang = lang.title()
     _Type = Type.upper() if Type else "Internal" 
     from tonpay.Defaults import formats
@@ -95,6 +108,10 @@ async def wallet_msg(update: Update, wallet_name: str, Type: str|None,
     header = lang_obj.header
     keyboard_markup = InlineKeyboardMarkup(keyboard)
     # parsmode MarkdownV2 or HTML
+    if as_new_msg: 
+        chat_id = update.callback_query.message.chat.id
+        return await context.bot.send_message(chat_id, header, reply_markup=keyboard_markup,
+                                       parse_mode=ParseMode.HTML)
     if edit_current:
             await query.answer()
             return await query.edit_message_text(header, reply_markup=keyboard_markup,
@@ -158,14 +175,35 @@ async def seeds_msg(update: Update, seeds: str, edit_current: bool = True,
         return await update.message.reply_text(title + _seeds, reply_markup=_keyboard)
     
     
-async def wait_msg(update: Update, edit_current: bool = True):
+async def wait_msg(update: Update, context:ContextTypes.DEFAULT_TYPE,
+                   edit_current: bool = True, as_new_msg: bool = False):
     header = "please wait..."
+    if as_new_msg: 
+        chat_id = update.effective_chat.id
+        return await context.bot.send_message(chat_id, header)
     if edit_current:
         query = update.callback_query
         await query.answer()
         return await query.edit_message_text(header)
     else: 
         return await update.message.reply_text(header)
+    
+    
+async def send_image(update: Update, context:ContextTypes.DEFAULT_TYPE, 
+                     image: bytes, edit_current: bool = True):
+    if edit_current:
+        ##### deleting previous menu
+        await del_current_query_msg(update, context)
+        ######
+    keyboard = InlineKeyboardMarkup([BackHomeKeyboard.Eng])
+    await update.callback_query.answer()
+    return await update.effective_user.send_photo(image, reply_markup=keyboard)
+
+
+async def del_current_query_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        msg_id = update.callback_query.message.message_id
+        chat_id = update.callback_query.message.chat.id
+        return await context.bot.delete_message(chat_id, msg_id)
         
 
 class ImportWalletMsg:
@@ -191,6 +229,7 @@ class ImportWalletMsg:
             return await query.edit_message_text(header, reply_markup=keyboard)
         else: 
             return await update.message.reply_text(header, reply_markup=keyboard)
+        
         
     
     

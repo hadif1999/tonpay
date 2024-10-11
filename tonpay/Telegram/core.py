@@ -1,4 +1,4 @@
-from telegram import Update
+from telegram import Update, Message
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -11,7 +11,7 @@ from telegram.ext import (
 
 from .messages import (MainMenu_msg, wallets_msg, FinanceMenu_msg,
                        wallet_msg, NewWalletMsg, ImportWalletMsg,
-                       wait_msg, seeds_msg)
+                       wait_msg, seeds_msg, send_image, del_current_query_msg)
 import os
 from tonpay.database.Models import (User, Wallet, insert_row, TON_Wallet)
 from tonpay.wallets.blockchain.TON import Wallet as TON_Wallet
@@ -33,7 +33,7 @@ HOME, WALLETS, WALLET_NAME, FINANCE, BACK = "home", "wallets", "walletname", "fi
 NEW_WALLET, SEEDS, TRANSFER, QRCODE, DELETE, REFRESH, IMPORT = "new_wallet", "seeds", "transfer", "qr_code", "delete", "refresh", "import"
 ### defining routes 
 MAIN_ROUTE, END_ROUTE, NEW_WALLET_ROUTE, WALLET_DETAIL_ROUTE, IMPORT_WALLET_ROUTE = 0, 1, 2, 3, 4
-IMPORT_WALLET_NAME_ROUTE = 5
+IMPORT_WALLET_NAME_ROUTE, QRCODE_ROUTE = 5, 6
 ##### params
 TOKEN = Defaults.options.telegram.token
 LANG = Defaults.options.telegram.lang
@@ -47,12 +47,13 @@ class MainHandler:
     __users_temp = {} # self.users["user_id"] = user        
         
     @logger.catch
-    async def finance(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def finance(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
+                      edit_current: bool = True):
         # query = update.callback_query # getting input query
         user_id = str(update.effective_user.id)
         user: User|None = await User.get(user_id)
         self.users[user_id] = user
-        await wait_msg(update)
+        await wait_msg(update, context)
         balance_ton = 0
         balance_USDT = 0
         for wallet in user.wallets:
@@ -62,7 +63,8 @@ class MainHandler:
             from tonpay.utils.ccxt import convert_ticker
             balance_ton = balance_USDT/(await convert_ticker(1, "TON", "USDT"))
         else: balance_ton = balance_USDT = 0 
-        await FinanceMenu_msg(update, LANG, round(balance_ton, 2), round(balance_USDT, 2))
+        await FinanceMenu_msg(update, LANG, round(balance_ton, 2), round(balance_USDT, 2),
+                              edit_current)
         self._prev_user_callback_temp[user_id] = self.home
         return MAIN_ROUTE
     
@@ -74,43 +76,54 @@ class MainHandler:
         user: User|None = await User.get(user_id)
         _wallets = await user.dump_wallets(asjson=True, include_fields=["address", "type", "id"])
         user._logger.debug("fetched user wallets: {wallets}", wallets=list(_wallets.keys()) )
-        await wallets_msg(update, _wallets, LANG, edit_current=edit_current)
+        await wallets_msg(update, context, _wallets, LANG, edit_current=edit_current)
         self._prev_user_callback_temp[user_id] = self.finance
         return MAIN_ROUTE
     
     
     @logger.catch
-    async def wallet(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def wallet(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
+                     edit_current: bool = True, as_new_msg: bool = False,
+                     wallet: str|Wallet|None = None):
         query = update.callback_query
-        wallet_name: str = '_'.join(query.data.split('_')[1:])
+        if isinstance(wallet, str):
+            wallet_name = wallet
+        elif not wallet: 
+            wallet_name = '_'.join(query.data.split('_')[1:])
         user_id = str(update.effective_user.id)
-        await wait_msg(update)
-        logger.debug(f"{wallet_name = }")
-        user: User|None = await User.get(user_id)
-        _wallet: Wallet = (await user.dump_wallets())[wallet_name]
-        logger.debug("fetched user wallet: {wallet}", wallet=_wallet.name )
+        _wait_msg = await wait_msg(update, context, as_new_msg=True)
+        if isinstance(wallet, Wallet):
+            _wallet = wallet
+            wallet_name = _wallet.name
+        else:
+            user: User|None = await User.get(user_id)
+            _wallet: Wallet = (await user.dump_wallets())[wallet_name]
         balance = await _wallet.balance
         addr = await _wallet.address
-        await wallet_msg(update, wallet_name, getattr(_wallet.type, "value", None),
-                         balance, addr, LANG)
+        logger.debug("fetched user wallet: {wallet}", wallet=wallet_name )
+        await wallet_msg(update, context, wallet_name, getattr(_wallet.type, "value", None),
+                         balance, addr, LANG, edit_current, as_new_msg)
+        await _wait_msg.delete()
         self._prev_user_callback_temp[user_id] = self.wallets
         WalletDetail._selected_wallet_temp[user_id] = _wallet
         return WALLET_DETAIL_ROUTE
     
     
     @logger.catch
-    async def back(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def back(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
+                   edit_current: bool = True):
         user_id = str(update.effective_user.id)
         prev_user_callback = self._prev_user_callback_temp[user_id]
         if not prev_user_callback: self.home(update, context)
-        await prev_user_callback(update, context)
+        await prev_user_callback(update, context, edit_current)
         return MAIN_ROUTE
     
     
     @logger.catch
-    async def home(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def home(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
+                   edit_current: bool = True, as_new_msg: bool = False):
         user_id = str(update.effective_user.id)
-        await MainMenu_msg(update, LANG, True)
+        await MainMenu_msg(update, context, LANG, edit_current, as_new_msg)
         self._init_vars()
         if user_id in self.users: del self.users[user_id]
         self._prev_user_callback_temp[user_id] = None
@@ -129,11 +142,12 @@ class MainHandler:
         await self.finance(update, context)
     
     
-    async def new_wallet(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def new_wallet(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
+                         edit_current: bool = True):
         user_id = str(update.effective_user.id)
         user = await self._get_db_user(user_id, update, context)
         if not user: return MAIN_ROUTE
-        await NewWalletMsg.type(update)
+        await NewWalletMsg.type(update, LANG, edit_current)
         self._prev_user_callback_temp[user_id] = self.wallets
         return NEW_WALLET_ROUTE
     
@@ -257,13 +271,52 @@ class ImportWallet(MainHandler):
             
             
     
-    
 class WalletDetail(MainHandler):
     _selected_wallet_temp:dict[str, Wallet] = {}
     
     async def qrcode(self, update:Update, context: ContextTypes.DEFAULT_TYPE):
-        pass
+        user_id = str(update.effective_user.id)
+        wallet: Wallet = self._selected_wallet_temp[user_id]
+        wallet_type: str = wallet.type.value.upper()
+        from tonpay.Defaults import formats
+        # generating url
+        url_fmt: str = getattr(formats.transfer_url, wallet_type)
+        addr = await wallet.address
+        url = url_fmt.format(addr = addr)
+        # generating qr-code
+        import qrcode
+        qr = qrcode.QRCode(version=1, box_size=10, border=4)
+        qr.add_data(url)
+        qr.make(True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        # sending to user
+        from io import BytesIO
+        bio = BytesIO()
+        bio.name = "qr_code.jpeg"
+        img.save(bio, "JPEG")
+        bio.seek(0) 
+        await send_image(update, context, bio)
+        self._prev_user_callback_temp[user_id] = self.wallet
+        return QRCODE_ROUTE  
     
+    
+    async def qrcode_back(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = str(update.effective_user.id)
+        wallet: Wallet = self._selected_wallet_temp[user_id]
+        ##### delete qr-code
+        await del_current_query_msg(update, context)
+        ######
+        await self.wallet(update, context, as_new_msg=True, wallet=wallet)
+        self._prev_user_callback_temp[user_id] = self.wallets
+        return WALLET_DETAIL_ROUTE
+    
+    
+    async def qrcode_home(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        ##### delete qr-code
+        await del_current_query_msg(update, context)
+        ######
+        return await super().home(update, context, as_new_msg=True)
+        
     
     async def transfer(self, update:Update, context: ContextTypes.DEFAULT_TYPE):
         pass
@@ -281,6 +334,7 @@ class WalletDetail(MainHandler):
         seeds = await detail.seeds  
         from tonpay.Telegram.styles.Utils import back_home_keyboard as bhk
         await seeds_msg(update, seeds, True, [bhk("Back", "Home")])
+        self._prev_user_callback_temp[user_id] = self.qrcode_back
         return WALLET_DETAIL_ROUTE  
     
     
@@ -330,6 +384,7 @@ class NewWalletHandler(MainHandler):
         name = update.message.text
         self._user_input_temp[user_id]["name"] = name
         _type = self._user_input_temp[user_id]["type"]
+        _wait_msg = await wait_msg(update, context, as_new_msg=True)
         user: User|None = await User.get(user_id, load_wallets=False)
         # assert name not in (await user.dump_wallets()).keys(), f"wallet {name=} is used before"
         wallet = await self._create_wallet(_type)
@@ -338,6 +393,7 @@ class NewWalletHandler(MainHandler):
         await user.add_wallet(name=name, address=addr, path=path, 
                               Type=_type, unit=_type)
         await self.wallets(update, context, edit_current=False) # back to wallets menu
+        await _wait_msg.delete()
         self._user_lastcallback_temp[user_id] = "name"
         return MAIN_ROUTE
     
@@ -356,14 +412,14 @@ class NewWalletHandler(MainHandler):
         user_id = str(update.effective_user.id)
         name = None # default wallet name
         _type = self._user_input_temp[user_id]["type"]
+        await wait_msg(update, context)
         user: User|None = await User.get(user_id)
-        await wait_msg(update, False)
         wallet = await self._create_wallet(_type)
         path = await wallet.get_path()
         addr = await wallet.get_address()
         await user.add_wallet(name=name, address=addr, path=path,
                               Type=_type, unit=_type)
-        await self.wallets(update, context, edit_current=True) # back to wallets menu
+        await self.wallets(update, context) # back to wallets menu
         return MAIN_ROUTE
     
     
@@ -421,25 +477,29 @@ def main() -> None:
                 CallbackQueryHandler(wallet.home, pattern=f"^{HOME}$"),
             ],
             WALLET_DETAIL_ROUTE:[
-                CallbackQueryHandler(wallet.refresh_wallet, pattern=f"^{REFRESH}$"),
+                CallbackQueryHandler(wallet_detail.refresh_wallet, pattern=f"^{REFRESH}$"),
                 CallbackQueryHandler(wallet_detail.qrcode, pattern=f"^{QRCODE}$"),
                 CallbackQueryHandler(wallet_detail.transfer, pattern=f"^{TRANSFER}$"),
                 CallbackQueryHandler(wallet_detail.seeds, pattern=f"^{SEEDS}$"),
                 CallbackQueryHandler(wallet_detail.delete, pattern=f"^{DELETE}$"),
-                CallbackQueryHandler(wallet.back, pattern=f"^{BACK}$"),
-                CallbackQueryHandler(wallet.home, pattern=f"^{HOME}$"),
+                CallbackQueryHandler(wallet_detail.back, pattern=f"^{BACK}$"),
+                CallbackQueryHandler(wallet_detail.home, pattern=f"^{HOME}$"),
             ],
             IMPORT_WALLET_ROUTE: [
                 CallbackQueryHandler(import_wallet.Type, 
                                      pattern=Utils.selectables2regex(blockchains)),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, import_wallet.seeds),
-                CallbackQueryHandler(wallet.back, pattern=f"^{BACK}$"),
-                CallbackQueryHandler(wallet.home, pattern=f"^{HOME}$"),
+                CallbackQueryHandler(import_wallet.back, pattern=f"^{BACK}$"),
+                CallbackQueryHandler(import_wallet.home, pattern=f"^{HOME}$"),
             ],
             IMPORT_WALLET_NAME_ROUTE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, import_wallet.name),
                 CommandHandler("skip", import_wallet.skip),
                 CommandHandler("cancel", import_wallet.cancel)
+            ],
+            QRCODE_ROUTE: [
+                CallbackQueryHandler(wallet_detail.qrcode_back, pattern=f"^{BACK}$"),
+                CallbackQueryHandler(wallet_detail.qrcode_home, pattern=f"^{HOME}$"),
             ]
         },
         fallbacks=[CommandHandler("start", main_handler.start)],

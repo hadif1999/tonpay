@@ -28,6 +28,8 @@ class formats:
         salt: str = _salt
     class explorer_url:
         TON = "https://tonviewer.com/{addr}"
+    class transfer_url: 
+        TON = "ton://transfer/{addr}"
 @dataclass        
 class users:
     class wallets:
