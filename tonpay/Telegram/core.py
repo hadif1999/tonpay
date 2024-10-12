@@ -11,7 +11,8 @@ from telegram.ext import (
 
 from .messages import (MainMenu_msg, wallets_msg, FinanceMenu_msg,
                        wallet_msg, NewWalletMsg, ImportWalletMsg,
-                       wait_msg, seeds_msg, send_image, del_current_query_msg)
+                       wait_msg, seeds_msg, send_image, del_current_query_msg,
+                       TransferMsg)
 import os
 from tonpay.database.Models import (User, Wallet, insert_row, TON_Wallet)
 from tonpay.wallets.blockchain.TON import Wallet as TON_Wallet
@@ -31,9 +32,11 @@ from tonpay.wallets.blockchain.Base import Wallet as BaseWallet
 # button names
 HOME, WALLETS, WALLET_NAME, FINANCE, BACK = "home", "wallets", "walletname", "finance", "back"
 NEW_WALLET, SEEDS, TRANSFER, QRCODE, DELETE, REFRESH, IMPORT = "new_wallet", "seeds", "transfer", "qr_code", "delete", "refresh", "import"
+CONFIRM, CANCEL = "confirm", "cancel" # for transaction
 ### defining routes 
 MAIN_ROUTE, END_ROUTE, NEW_WALLET_ROUTE, WALLET_DETAIL_ROUTE, IMPORT_WALLET_ROUTE = 0, 1, 2, 3, 4
-IMPORT_WALLET_NAME_ROUTE, QRCODE_ROUTE = 5, 6
+IMPORT_WALLET_NAME_ROUTE, QRCODE_ROUTE, TRANSFER_ROUTE, TRANSACTIONS_ROUTE = 5, 6, 7, 8
+TRANSFER_AMOUNT_ROUTE = 9
 ##### params
 TOKEN = Defaults.options.telegram.token
 LANG = Defaults.options.telegram.lang
@@ -105,7 +108,7 @@ class MainHandler:
                          balance, addr, LANG, edit_current, as_new_msg)
         await _wait_msg.delete()
         self._prev_user_callback_temp[user_id] = self.wallets
-        WalletDetail._selected_wallet_temp[user_id] = _wallet
+        WalletDetailHandler._selected_wallet_temp[user_id] = _wallet
         return WALLET_DETAIL_ROUTE
     
     
@@ -203,7 +206,7 @@ class MainHandler:
         return self.__users_temp
 
 
-class ImportWallet(MainHandler):
+class ImportWalletHandler(MainHandler):
     _user_input_temp = {} # _user_input_temp[user_id] = {"name": None, "type": None, "seeds": None}
     _user_lastcallback_temp = {}
     
@@ -271,7 +274,7 @@ class ImportWallet(MainHandler):
             
             
     
-class WalletDetail(MainHandler):
+class WalletDetailHandler(MainHandler):
     _selected_wallet_temp:dict[str, Wallet] = {}
     
     async def qrcode(self, update:Update, context: ContextTypes.DEFAULT_TYPE):
@@ -319,7 +322,8 @@ class WalletDetail(MainHandler):
         
     
     async def transfer(self, update:Update, context: ContextTypes.DEFAULT_TYPE):
-        pass
+        await TransferMsg.dest(update, context)
+        return TRANSFER_ROUTE
     
     
     async def transactions(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -445,14 +449,64 @@ class NewWalletHandler(MainHandler):
             self._user_input_temp = {}
         if sys.getsizeof(self._user_lastcallback_temp) >= max_size:
             self._user_lastcallback_temp = {}
+            
+            
+class TransferHandler(WalletDetailHandler):
+    _user_input_temp = {}
     
+    async def dest(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = str(update.effective_user.id)
+        dest = update.message.text
+        self._user_input_temp[user_id] = {"dest": dest, "amt": None}
+        await TransferMsg.amount(update, context, as_new_msg = True)
+        return TRANSFER_AMOUNT_ROUTE
+    
+    
+    async def amount(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = str(update.effective_user.id)
+        amt = float(update.message.text)
+        self._user_input_temp[user_id]["amt"] = amt
+        dest = self._user_input_temp[user_id]["dest"]
+        wallet_db: Wallet = self._selected_wallet_temp[user_id]
+        src = await wallet_db.address
+        Type = wallet_db.type.value
+        await TransferMsg.confirm(update, context, src, 
+                                  dest, amt, Type, as_new_msg = True)
+        return TRANSFER_AMOUNT_ROUTE
+    
+    
+    async def confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = str(update.effective_user.id)
+        inputs = self._user_input_temp[user_id]
+        dest, amt = inputs["dest"], inputs["amt"]
+        wallet_db: Wallet = self._selected_wallet_temp[user_id]
+        Type = wallet_db.type.value
+        path = await (await wallet_db.wallet_detail).decrypt_path
+        from importlib import import_module
+        wallet_cls = import_module(f"tonpay.wallets.blockchain.{Type}").Wallet
+        wallet: BaseWallet = await wallet_cls.find_wallet(path)
+        await del_current_query_msg(update, context)
+        await wallet.transfer(dest, amt, "any comment", "TON")
+        await TransferMsg.success(update, context)
+        await self.wallet(update, context, wallet=wallet_db, as_new_msg=True)
+        return WALLET_DETAIL_ROUTE    
+    
+    
+    async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = str(update.effective_user.id)
+        wallet_db: Wallet = self._selected_wallet_temp[user_id]
+        await self.wallet(update, context, wallet=wallet_db)
+        return WALLET_DETAIL_ROUTE
+        
 
 
 def main() -> None:
     main_handler = MainHandler()
     wallet = NewWalletHandler()
-    wallet_detail = WalletDetail()
-    import_wallet = ImportWallet()
+    wallet_detail = WalletDetailHandler()
+    import_wallet = ImportWalletHandler()
+    transfer = TransferHandler()
+    # transaction = TransactionsHandler()
     
     application = Application.builder().token(TOKEN) \
                   .concurrent_updates(True).build()
@@ -500,6 +554,19 @@ def main() -> None:
             QRCODE_ROUTE: [
                 CallbackQueryHandler(wallet_detail.qrcode_back, pattern=f"^{BACK}$"),
                 CallbackQueryHandler(wallet_detail.qrcode_home, pattern=f"^{HOME}$"),
+            ],
+            TRANSFER_ROUTE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, transfer.dest),
+                CallbackQueryHandler(transfer.back, pattern=f"^{BACK}$"),
+                CallbackQueryHandler(transfer.home, pattern=f"^{HOME}$"),
+            ],
+            TRANSFER_AMOUNT_ROUTE: [
+                MessageHandler(filters.Regex(Utils.isFloat_regex) & ~filters.COMMAND,
+                transfer.amount),
+                CallbackQueryHandler(transfer.confirm, pattern=f"^{CONFIRM}$"),
+                CallbackQueryHandler(transfer.cancel, pattern=f"^{CANCEL}$")
+            ],
+            TRANSACTIONS_ROUTE: [
             ]
         },
         fallbacks=[CommandHandler("start", main_handler.start)],

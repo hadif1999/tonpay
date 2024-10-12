@@ -229,10 +229,73 @@ class ImportWalletMsg:
             return await query.edit_message_text(header, reply_markup=keyboard)
         else: 
             return await update.message.reply_text(header, reply_markup=keyboard)
-        
-        
+            
+
+class TransferMsg:
+    
+    @staticmethod
+    async def dest(update: Update, context: ContextTypes.DEFAULT_TYPE,
+                   edit_current: bool = True, as_new_msg: bool = False):
+        header = "enter destination address: \n\n"
+        keyboard = InlineKeyboardMarkup([BackHomeKeyboard.Eng])
+        if as_new_msg:
+            chat_id = update.effective_chat.id
+            return await context.bot.send_message(chat_id, header, reply_markup=keyboard)
+        if edit_current:
+            query = update.callback_query
+            await query.answer()
+            return await query.edit_message_text(header, reply_markup=keyboard)
+        else: 
+            return await update.message.reply_text(header, reply_markup=keyboard)        
     
     
+    @staticmethod
+    async def amount(update:Update, context:ContextTypes.DEFAULT_TYPE,
+                     edit_current: bool = True, as_new_msg: bool = False):
+        header = "enter amount: \n\n"
+        keyboard = InlineKeyboardMarkup([BackHomeKeyboard.Eng])
+        if as_new_msg:
+            chat_id = update.effective_chat.id
+            return await context.bot.send_message(chat_id, header, reply_markup=keyboard)
+        if edit_current:
+            query = update.callback_query
+            await query.answer()
+            return await query.edit_message_text(header, reply_markup=keyboard)
+        else: 
+            return await update.message.reply_text(header, reply_markup=keyboard)
+        
+    
+    @staticmethod
+    async def confirm(update:Update, context:ContextTypes.DEFAULT_TYPE,
+                      src:str, dest:str, amt: float, Type: str,
+                      edit_current: bool = True, as_new_msg: bool = False, 
+                      lang:str = "eng"):
+        lang = lang.title()
+        from tonpay.Telegram.styles.transfer import summery
+        lang_cls = getattr(summery, lang)
+        lang_obj = lang_cls(src=src, dest=dest, amt=amt, Type=Type)
+        keyboard_raw, header = lang_obj.keyboard, lang_obj.header
+        keyboard = InlineKeyboardMarkup(keyboard_raw)
+        if as_new_msg:
+            chat_id = update.effective_chat.id
+            return await context.bot.send_message(chat_id, header, 
+                                                  reply_markup=keyboard, 
+                                                  parse_mode=ParseMode.HTML)
+        if edit_current:
+            query = update.callback_query
+            await query.answer()
+            return await query.edit_message_text(header, reply_markup=keyboard, 
+                                                 parse_mode=ParseMode.HTML)
+        else: 
+            return await update.message.reply_text(header, reply_markup=keyboard, 
+                                                   parse_mode=ParseMode.HTML)
+        
+        
+    @staticmethod
+    async def success(update:Update, context:ContextTypes.DEFAULT_TYPE):
+        header = "transfer done successfully: \n\n"
+        chat_id = update.effective_chat.id
+        return await context.bot.send_message(chat_id, header)
     
         
     

@@ -7,8 +7,8 @@ from tonpay.wallets.blockchain.Base import InSufficientBalanceError
 from tonpay.wallets.blockchain.Base import Wallet as BaseWallet
 
 
-async def get_client():
-    client = TonlibClient()
+async def get_client(ls_index=2):
+    client = TonlibClient(ls_index=ls_index)
     TonlibClient.enable_unaudited_binaries()
     await client.init_tonlib()
     return client
@@ -26,8 +26,9 @@ class Wallet(BaseWallet):
         
     
     @classmethod
-    async def _get_client(cls):
-        cls.__client = cls.__client or await get_client()
+    async def _get_client(cls, refresh: bool = False, ls_index: int = 2):
+        if refresh: cls.__client = None
+        cls.__client = cls.__client or await get_client(ls_index)
         return cls.__client
         
         
@@ -91,7 +92,9 @@ class Wallet(BaseWallet):
     async def transfer(self, dest_addr:str, amount: float, comment: str| None = None, 
                        unit: Literal["TON", "nTON"] = "TON", **kwargs):
         amount = self.from_nano(amount) if unit == "nTON" else amount # amount in ton 
-        if (await self.balance) < amount: raise InSufficientBalanceError
+        if (await self.get_balance()) < amount: 
+            addr = await self.get_address()
+            raise InSufficientBalanceError(f"insufficient balance in source wallet address: {addr}")
         await self.__wallet.transfer(dest_addr,
                                      self.to_nano(amount),
                                      comment = comment, **kwargs)

@@ -44,10 +44,11 @@ class InSufficientBalanceError(Exception):
     def __init__(self, msg: str, code: int|None = None) -> None:
         super().__init__(msg)
         self.error_code = code
+        self.msg = msg
         
     def __str__(self) -> str:
         code = self.error_code
-        return "Error: {self.args[0]}" 
+        return f"Error: {self.msg}" 
     
 
     
