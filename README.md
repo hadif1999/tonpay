@@ -35,6 +35,7 @@ allowing the bot to handle user commands and actions.
 - **[wolfcrypt](https://github.com/wolfssl/wolfcrypt-py):** used for Authentication.
 
 For a complete list of dependencies, see the requirements.txt file.
+<br>
 make sure above packages installed properly as sometimes there are problems with their installation.
 
 ## Installation
