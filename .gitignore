@@ -2,3 +2,5 @@
 *.ipynb
 *test*
 *venv*
+*log*
+*.swp
