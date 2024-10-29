@@ -7,6 +7,11 @@ for users to manage crypto assets directly from Telegram.
 Future updates may bring support for Ethereum (ETH) and Binance
 Coin (BNB).
 
+![alt text](https://github.com/hadif1999/tonpay/blob/master/assests/main.png?raw=true)
+![alt text](https://github.com/hadif1999/tonpay/blob/master/assests/wallets.png?raw=true)
+![alt text](https://github.com/hadif1999/tonpay/blob/master/assests/wallet.png?raw=true)
+
+
 ## Description
 
 TONPAY is a Telegram-based crypto wallet bot developed to provide users a
