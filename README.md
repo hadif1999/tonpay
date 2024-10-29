@@ -11,7 +11,6 @@ Coin (BNB).
 ![alt text](https://github.com/hadif1999/tonpay/blob/master/assests/wallets.png?raw=true)
 ![alt text](https://github.com/hadif1999/tonpay/blob/master/assests/wallet.png?raw=true)
 
-
 ## Description
 
 TONPAY is a Telegram-based crypto wallet bot developed to provide users a
