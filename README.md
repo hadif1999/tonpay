@@ -29,12 +29,13 @@ storage, and management of wallets for multiple users With a focus on simplicity
 
 ## Dependencies
 
-**[python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot):** Enables integration with Telegram,
+- **[python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot):** Enables integration with Telegram,
 allowing the bot to handle user commands and actions.
-**[TonTools / ton](https://github.com/psylopunk/pytonlib.git):** Provides essential tools and libraries 
-for interacting with the TON blockchain.
+- **[TonTools / ton](https://github.com/psylopunk/pytonlib.git):** Provides essential tools and libraries for interacting with the TON blockchain.
+- **[wolfcrypt](https://github.com/wolfssl/wolfcrypt-py):** used for Authentication.
 
 For a complete list of dependencies, see the requirements.txt file.
+make sure above packages installed properly as sometimes there are problems with their installation.
 
 ## Installation
 To set up TONPAY on your local environment:
