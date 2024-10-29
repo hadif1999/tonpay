@@ -1,5 +1,6 @@
 annotated-types==0.7.0
 anyio==4.6.2.post1
+APScheduler==3.10.4
 asttokens==2.4.1
 asyncpg==0.30.0
 bitarray==3.0.0
@@ -75,5 +76,6 @@ tornado==6.4.1
 traitlets==5.14.3
 typing_extensions==4.12.2
 tzdata==2024.2
+tzlocal==5.2
 urllib3==2.2.3
 wcwidth==0.2.13
