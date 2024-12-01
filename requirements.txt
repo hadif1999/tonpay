@@ -9,3 +9,5 @@ psycopg2
 asyncpg
 pydantic[email]
 python-dotenv
+psycopg2-binary
+python-telegram-bot[job-queue]
