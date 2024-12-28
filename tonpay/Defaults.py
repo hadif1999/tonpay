@@ -2,7 +2,7 @@ import json
 from tonpay import config
 import os
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Any
 from enum import Enum
 
 _max_user_demo_wallets = config["user"].get("max_wallets", 5)
@@ -13,6 +13,7 @@ _key_fmt = config["wallet_encryption"]["SYMMETRIC_KEY"]
 _platform_name = config["general"]["name"]
 _lang = config["general"].get("language", "eng")
 _telegram_lang = config["telegram"].get("language", _lang)
+_database: dict[str, Any] = config["general"]["database"] 
 class Blockchain_enum(str, Enum):
         TON = "TON"
         ETH = "ETH"
@@ -42,6 +43,9 @@ class options:
     class telegram:
         lang = _telegram_lang
         token = config["telegram"].get("token", os.getenv("TELEGRAM_TOKEN"))
+    class database: 
+        as_aync: bool = _database.get("as_aync", True)
+        db_uri: str = _database.get("uri", os.getenv("DATABASE_URI"))
         
 @dataclass
 class types:

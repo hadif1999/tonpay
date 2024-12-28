@@ -5,19 +5,18 @@ from . import Models
 # from tonpay.database.Models import User, External_Wallet, Internal_Wallet
 from loguru import logger
 from sqlalchemy_utils import database_exists, create_database, drop_database
+from tonpay.Defaults import options
 
+URI_RAW = options.database.db_uri
+isAsync = options.database.as_aync
 
-DB_HOST = "172.19.0.2"
-DB_SECRET = "secret"
-DB_USER = "postgres"
-DB_NAME = "tonpay.db"
-DB_URI_BASE = f"{DB_USER}:{DB_SECRET}@{DB_HOST}/{DB_NAME}"
+if URI_RAW.startswith("postgresql://"):
+    URI_async = URI_RAW.replace("postgresql://", "postgresql+asyncpg://")
+    URI_sync = URI_RAW.replace("postgresql://", "postgresql+psycopg2://")    
+else: raise ValueError("Database URI must start with 'postgresql://'")
 
-ENGINE = create_engine(os.getenv("DB_URI", 
-                                 f"postgresql+psycopg2://{DB_URI_BASE}"))
-
-ASYNC_ENGINE = create_async_engine(os.getenv("DB_URI", 
-                                  f"postgresql+asyncpg://{DB_URI_BASE}"))
+ENGINE = create_engine(URI_sync)
+ASYNC_ENGINE = create_async_engine(URI_async)
 
 
 def build_DB(overwrite_db: bool = False):

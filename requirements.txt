@@ -79,3 +79,4 @@ tzdata==2024.2
 tzlocal==5.2
 urllib3==2.2.3
 wcwidth==0.2.13
+pydantic-settings==2.7.0

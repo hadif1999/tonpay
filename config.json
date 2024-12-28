@@ -14,7 +14,12 @@
 		"isprod": false,
 		"language": "eng", 
 		"datetime_format": "%Y-%m-%y_%H:%M:%S",
-		"blockchains": ["ETH", "BNB", "TON"]},
+		"blockchains": ["ETH", "BNB", "TON"],
+		"database":{
+			"uri": "postgresql://postgres:secret@172.19.0.3/tonpay.db",
+			"as_async": true
+		} 
+	},
 
 	"telegram":
 		{	

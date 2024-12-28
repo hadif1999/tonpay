@@ -338,7 +338,7 @@ class WalletDetailHandler(MainHandler):
         seeds = await detail.seeds  
         from tonpay.Telegram.styles.Utils import back_home_keyboard as bhk
         await seeds_msg(update, seeds, True, [bhk("Back", "Home")])
-        self._prev_user_callback_temp[user_id] = self.qrcode_back
+        self._prev_user_callback_temp[user_id] = self.wallets
         return WALLET_DETAIL_ROUTE  
     
     
