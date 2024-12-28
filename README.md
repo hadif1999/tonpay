@@ -33,13 +33,15 @@ storage, and management of wallets for multiple users With a focus on simplicity
 allowing the bot to handle user commands and actions.
 - **[TonTools / ton](https://github.com/psylopunk/pytonlib.git):** Provides essential tools and libraries for interacting with the TON blockchain.
 - **[wolfcrypt](https://github.com/wolfssl/wolfcrypt-py):** used for Authentication.
+- **[asyncpg](https://github.com/MagicStack/asyncpg)**: user for connceting to postgres database asynchronously. 
+- **[psycopg2](https://www.psycopg.org/psycopg3/docs/basic/install.html)**: for connceting to postgres database.(make sure binaries properly installed)
 
 For a complete list of dependencies, see the requirements.txt file.
 <br>
 make sure above packages installed properly as sometimes there are problems with their installation.
 
 ## Installation
-To set up TONPAY on your local environment:
+To set up TONPAY on your local environment (Ubuntu 22.04 recommended):
 1. **Clone the repository:**
 ``` bash
 git clone https://github.com/hadif1999/tonpay.git
@@ -55,13 +57,19 @@ source env/bin/activate  # On Windows: env\Scripts\activate
 pip install -r requirements.txt
 ```
 4. **setup config.json file for your own needs** 
+- add Telegram bot TOKEN, Database uri and other parameters
+- define your own authorization method by edditing "wallet_encryption" params.
 5. **start a sql database server (postgres recommended)**
-6. **Set up environment variables (e.g., Telegram Bot Token, database URI) in a .env file:**
+- you can run a postgres database by running the docker-compose.yml file provided for testing 
+```bash
+docker compose up -d 
+```
+1. **Set up environment variables (e.g., Telegram Bot Token, database URI) in a .env file:**
 ``` bash 
 TELEGRAM_TOKEN=your_telegram_token
 DB_URI=<DB_USER>:<DB_SECRET>@<DB_HOST>/<DB_NAME>
 ```
-7. **Run the bot:**
+1. **Run the bot:**
    
 ``` bash
 python3 __main__.py # or just run "python3 ."
