@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 annotated-types==0.7.0
 anyio==4.6.2.post1
 APScheduler==3.10.4
@@ -80,3 +81,18 @@ tzlocal==5.2
 urllib3==2.2.3
 wcwidth==0.2.13
 pydantic-settings==2.7.0
+=======
+setuptools
+python-telegram-bot
+loguru 
+ton 
+sqlmodel
+wheel
+sqlalchemy_utils
+psycopg2
+asyncpg
+pydantic[email]
+python-dotenv
+psycopg2-binary
+python-telegram-bot[job-queue]
+>>>>>>> d2742ffaea9aef1a8873990c8cee864ac7ea43f9
