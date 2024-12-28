@@ -16,7 +16,7 @@
 		"datetime_format": "%Y-%m-%y_%H:%M:%S",
 		"blockchains": ["ETH", "BNB", "TON"],
 		"database":{
-			"uri": "postgresql://postgres:secret@172.19.0.3/tonpay.db",
+			"uri": "postgresql://postgres:secret@127.0.0.1:5432/tonpay.db",
 			"as_async": true
 		} 
 	},
